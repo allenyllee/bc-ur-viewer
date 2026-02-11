@@ -14,6 +14,7 @@ const el = {
   progressFill: document.getElementById('progressFill'),
   partStats: document.getElementById('partStats'),
   urType: document.getElementById('urType'),
+  cardanoPanel: document.getElementById('cardanoPanel'),
   cardanoTx: document.getElementById('cardanoTx'),
   cardanoTxDetails: document.getElementById('cardanoTxDetails'),
   decodedText: document.getElementById('decodedText'),
@@ -73,6 +74,7 @@ function clearResult() {
   el.decodedText.value = '';
   el.decodedHex.value = '';
   el.decodedBase64.value = '';
+  el.cardanoPanel.classList.add('hidden');
 }
 
 function resetDecoder() {
@@ -508,6 +510,14 @@ function formatCardanoSignatureDetails(payload) {
   };
 }
 
+function setCardanoPanelVisible(visible) {
+  if (visible) {
+    el.cardanoPanel.classList.remove('hidden');
+  } else {
+    el.cardanoPanel.classList.add('hidden');
+  }
+}
+
 function handleURSuccess() {
   const ur = urDecoder.resultUR();
   const decoded = ur.decodeCBOR();
@@ -535,25 +545,27 @@ function handleURSuccess() {
   const urType = typeof ur.type === 'string' ? ur.type.toLowerCase() : '';
   const isCardanoUr = urType.startsWith('cardano-');
   if (isCardanoUr) {
+    setCardanoPanelVisible(true);
     if (urType === 'cardano-signature') {
       const sig = formatCardanoSignatureDetails(decoded);
       el.cardanoTx.value = sig.signatureHex;
       el.cardanoTxDetails.value = sig.summary;
       log('偵測到 cardano-signature，已改用簽章資料解析。');
     } else {
-    const txCandidate = findCardanoTxBytes(decoded);
-    if (txCandidate) {
-      el.cardanoTx.value = txCandidate.bytes.toString('hex');
-      const txDetails = parseCardanoTx(txCandidate.bytes, decoded);
-      el.cardanoTxDetails.value = formatCardanoTxDetails(txDetails);
-      log(`已抽取 Cardano Tx，來源路徑=${txCandidate.path.join('.') || '(root)'}，長度=${txCandidate.bytes.length} bytes`);
-    } else {
-      el.cardanoTx.value = '';
-      el.cardanoTxDetails.value = '';
-      log('未在 Cardano payload 找到可辨識的交易 bytes。');
-    }
+      const txCandidate = findCardanoTxBytes(decoded);
+      if (txCandidate) {
+        el.cardanoTx.value = txCandidate.bytes.toString('hex');
+        const txDetails = parseCardanoTx(txCandidate.bytes, decoded);
+        el.cardanoTxDetails.value = formatCardanoTxDetails(txDetails);
+        log(`已抽取 Cardano Tx，來源路徑=${txCandidate.path.join('.') || '(root)'}，長度=${txCandidate.bytes.length} bytes`);
+      } else {
+        el.cardanoTx.value = '';
+        el.cardanoTxDetails.value = '';
+        log('未在 Cardano payload 找到可辨識的交易 bytes。');
+      }
     }
   } else {
+    setCardanoPanelVisible(false);
     el.cardanoTx.value = '';
     el.cardanoTxDetails.value = '';
   }

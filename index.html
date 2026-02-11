@@ -40,23 +40,29 @@
       </section>
 
       <section class="dashboard">
-        <section class="card output panel-center">
-          <h2>Cardano 交易解析</h2>
-          <div class="kv">
-            <span>UR Type</span>
-            <code id="urType">-</code>
-          </div>
-          <label for="cardanoTxDetails">Tx Details</label>
-          <textarea id="cardanoTxDetails" rows="12" readonly></textarea>
-          <label for="cardanoTx">Cardano Tx（Hex）</label>
-          <textarea id="cardanoTx" rows="4" readonly></textarea>
-          <label for="decodedText">Decoded Payload（JSON / UTF-8）</label>
-          <textarea id="decodedText" rows="4" readonly></textarea>
-          <label for="decodedHex">CBOR Hex</label>
-          <textarea id="decodedHex" rows="5" readonly></textarea>
-          <label for="decodedBase64">CBOR Base64</label>
-          <textarea id="decodedBase64" rows="3" readonly></textarea>
-        </section>
+        <div class="panel-stack panel-center">
+          <section class="card output raw-panel">
+            <h2>解析結果（Raw Data）</h2>
+            <div class="kv">
+              <span>UR Type</span>
+              <code id="urType">-</code>
+            </div>
+            <label for="decodedText">Decoded Payload（JSON / UTF-8）</label>
+            <textarea id="decodedText" rows="6" readonly></textarea>
+            <label for="decodedHex">CBOR Hex</label>
+            <textarea id="decodedHex" rows="5" readonly></textarea>
+            <label for="decodedBase64">CBOR Base64</label>
+            <textarea id="decodedBase64" rows="3" readonly></textarea>
+          </section>
+
+          <section id="cardanoPanel" class="card output cardano-panel hidden">
+            <h2>Cardano 交易解析</h2>
+            <label for="cardanoTxDetails">Tx Details</label>
+            <textarea id="cardanoTxDetails" rows="12" readonly></textarea>
+            <label for="cardanoTx">Cardano Tx（Hex）</label>
+            <textarea id="cardanoTx" rows="4" readonly></textarea>
+          </section>
+        </div>
 
         <section class="card logs panel-right">
           <h2>掃描紀錄</h2>

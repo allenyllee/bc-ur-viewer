@@ -124,6 +124,11 @@ button:disabled {
   gap: 16px;
 }
 
+.panel-stack {
+  display: grid;
+  gap: 16px;
+}
+
 .scan-stage {
   display: grid;
   gap: 16px;
@@ -161,6 +166,11 @@ textarea {
 }
 
 .output {
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.cardano-panel {
   border: 1px solid rgba(14, 122, 109, 0.34);
   background: linear-gradient(170deg, rgba(244, 255, 251, 0.95), rgba(255, 255, 255, 0.92));
 }
@@ -173,6 +183,10 @@ textarea {
 
 #cardanoTx {
   background: #f7fbff;
+}
+
+.hidden {
+  display: none !important;
 }
 
 pre {
