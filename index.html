@@ -3,25 +3,30 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>BC-UR Fountain Viewer</title>
+    <title data-i18n="app.title">BC-UR Fountain Viewer</title>
     <script type="module" src="/src/main.js"></script>
   </head>
   <body>
     <main class="app">
       <header class="hero">
-        <h1>BC-UR Fountain Viewer</h1>
-        <p>啟動相機後掃描 UR QR（含多片 fountain code）並即時解析。</p>
+        <h1 data-i18n="hero.title">BC-UR Fountain Viewer</h1>
+        <p data-i18n="hero.subtitle">啟動相機後掃描 UR QR（含多片 fountain code）並即時解析。</p>
       </header>
 
       <section class="card controls">
-        <label for="cameraSelect">鏡頭來源</label>
+        <label for="cameraSelect" data-i18n="controls.camera">鏡頭來源</label>
         <select id="cameraSelect"></select>
+        <label for="languageSelect" data-i18n="controls.language">語言</label>
+        <select id="languageSelect">
+          <option value="zh-TW">繁體中文</option>
+          <option value="en">English</option>
+        </select>
         <div class="button-row">
-          <button id="startBtn" type="button">啟動掃描</button>
-          <button id="stopBtn" type="button" disabled>停止掃描</button>
-          <button id="resetBtn" type="button">重置解碼</button>
+          <button id="startBtn" type="button" data-i18n="controls.start">啟動掃描</button>
+          <button id="stopBtn" type="button" disabled data-i18n="controls.stop">停止掃描</button>
+          <button id="resetBtn" type="button" data-i18n="controls.reset">重置解碼</button>
         </div>
-        <p id="status" class="status">尚未啟動鏡頭。</p>
+        <p id="status" class="status" data-i18n="status.idle">尚未啟動鏡頭。</p>
       </section>
 
       <section class="scan-stage">
@@ -30,42 +35,42 @@
         </section>
 
         <section class="card progress">
-          <h2>解碼進度</h2>
+          <h2 data-i18n="progress.title">解碼進度</h2>
           <p id="progressText">0%</p>
           <div class="progress-bar">
             <div id="progressFill"></div>
           </div>
-          <p id="partStats">尚未收到任何 fragment。</p>
+          <p id="partStats" data-i18n="progress.none">尚未收到任何 fragment。</p>
         </section>
       </section>
 
       <section class="dashboard">
         <div class="panel-stack panel-center">
           <section id="rawPanel" class="card output raw-panel overlay-trigger">
-            <h2>解析結果（Raw Data）</h2>
+            <h2 data-i18n="raw.title">解析結果（Raw Data）</h2>
             <div class="kv">
-              <span>UR Type</span>
+              <span data-i18n="raw.urType">UR Type</span>
               <code id="urType">-</code>
             </div>
-            <label for="decodedText">Decoded Payload（JSON / UTF-8）</label>
+            <label for="decodedText" data-i18n="raw.decodedPayload">Decoded Payload（JSON / UTF-8）</label>
             <textarea id="decodedText" rows="6" readonly></textarea>
-            <label for="decodedHex">CBOR Hex</label>
+            <label for="decodedHex" data-i18n="raw.cborHex">CBOR Hex</label>
             <textarea id="decodedHex" rows="5" readonly></textarea>
-            <label for="decodedBase64">CBOR Base64</label>
+            <label for="decodedBase64" data-i18n="raw.cborBase64">CBOR Base64</label>
             <textarea id="decodedBase64" rows="3" readonly></textarea>
           </section>
 
           <section id="cardanoPanel" class="card output cardano-panel overlay-trigger hidden">
-            <h2>Cardano 交易解析</h2>
-            <label for="cardanoTxDetails">Tx Details</label>
+            <h2 data-i18n="cardano.title">Cardano 交易解析</h2>
+            <label for="cardanoTxDetails" data-i18n="cardano.txDetails">Tx Details</label>
             <textarea id="cardanoTxDetails" rows="12" readonly></textarea>
-            <label for="cardanoTx">Cardano Tx（Hex）</label>
+            <label for="cardanoTx" data-i18n="cardano.txHex">Cardano Tx（Hex）</label>
             <textarea id="cardanoTx" rows="4" readonly></textarea>
           </section>
         </div>
 
         <section class="card logs panel-right">
-          <h2>掃描紀錄</h2>
+          <h2 data-i18n="logs.title">掃描紀錄</h2>
           <pre id="logBox"></pre>
         </section>
       </section>

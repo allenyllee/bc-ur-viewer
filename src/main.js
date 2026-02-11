@@ -5,6 +5,7 @@ globalThis.Buffer = globalThis.Buffer || Buffer;
 
 const el = {
   cameraSelect: document.getElementById('cameraSelect'),
+  languageSelect: document.getElementById('languageSelect'),
   startBtn: document.getElementById('startBtn'),
   stopBtn: document.getElementById('stopBtn'),
   resetBtn: document.getElementById('resetBtn'),
@@ -37,6 +38,168 @@ let urDecoder = null;
 const seenParts = new Set();
 let cardanoOverlayOpen = false;
 let activeOverlayPanel = null;
+let currentLang = 'zh-TW';
+
+const I18N = {
+  'zh-TW': {
+    'app.title': 'BC-UR Fountain Viewer',
+    'hero.title': 'BC-UR Fountain Viewer',
+    'hero.subtitle': '啟動相機後掃描 UR QR（含多片 fountain code）並即時解析。',
+    'controls.camera': '鏡頭來源',
+    'controls.language': '語言',
+    'controls.start': '啟動掃描',
+    'controls.stop': '停止掃描',
+    'controls.reset': '重置解碼',
+    'status.idle': '尚未啟動鏡頭。',
+    'status.done': '解碼完成。',
+    'status.failDecode': '解碼失敗：{err}',
+    'status.noCamera': '找不到可用鏡頭。',
+    'status.readCameraFail': '讀取鏡頭列表失敗。',
+    'status.initPending': '初始化中，請稍候再試。',
+    'status.startingCamera': '正在啟動鏡頭...',
+    'status.cameraReady': '鏡頭已啟動，請將 BC-UR QR 對準鏡頭。',
+    'status.cameraStartFail': '鏡頭啟動失敗，請確認權限或 HTTPS/localhost。',
+    'status.stopped': '已停止掃描。',
+    'status.resetDone': '已重置解碼。',
+    'status.scanWaiting': '掃描中，等待新片段。',
+    'status.initFail': '初始化失敗，請重整頁面。',
+    'progress.title': '解碼進度',
+    'progress.none': '尚未收到任何 fragment。',
+    'progress.collected': '已收集 {received} / {expected} 個 fragment',
+    'raw.title': '解析結果（Raw Data）',
+    'raw.urType': 'UR Type',
+    'raw.decodedPayload': 'Decoded Payload（JSON / UTF-8）',
+    'raw.cborHex': 'CBOR Hex',
+    'raw.cborBase64': 'CBOR Base64',
+    'cardano.title': 'Cardano 交易解析',
+    'cardano.txDetails': 'Tx Details',
+    'cardano.txHex': 'Cardano Tx（Hex）',
+    'logs.title': '掃描紀錄',
+    'camera.notFoundOption': '找不到可用鏡頭',
+    'camera.defaultLabel': 'Camera {index}',
+    'camera.notSupportedEnum': '此瀏覽器不支援 enumerateDevices',
+    'camera.notSupportedMedia': '此瀏覽器不支援 getUserMedia',
+    'log.reset': '已重置解碼器。',
+    'log.signatureDetected': '偵測到 cardano-signature，已改用簽章資料解析。',
+    'log.extractTx': '已抽取 Cardano Tx，來源路徑={path}，長度={length} bytes',
+    'log.noCardanoTx': '未在 Cardano payload 找到可辨識的交易 bytes。',
+    'log.decodeSuccess': '解碼成功，UR type={type}，CBOR 長度={length} bytes',
+    'log.partRejected': '收到 UR 片段，但解碼器未接受（可能格式不符）。',
+    'log.partReceived': '收到片段：{part}...',
+    'log.decodeFail': '解碼失敗：{err}',
+    'log.partError': '片段處理錯誤：{err}',
+    'log.listCameraFail': '無法列出鏡頭：{err}',
+    'log.scanError': '掃描錯誤：{err}',
+    'log.cameraRetry': '指定鏡頭啟動失敗，改用預設鏡頭重試：{err}',
+    'log.scanStarted': '掃描已開始。',
+    'log.cameraStartFail': '鏡頭啟動失敗：{err}',
+    'log.scanStopped': '掃描已停止。',
+    'log.initFail': '初始化失敗：{err}',
+    'msg.unreadableUtf8': '[非可讀 UTF-8 文字，請改看 Hex/Base64]',
+    'msg.invalidUtf8': '[無法轉成 UTF-8，請改看 Hex/Base64]',
+    'msg.nonSerializablePayload': '[此 UR payload 為複合資料，無法直接序列化]',
+    'msg.unknownError': '未知錯誤',
+    'msg.cardanoParserMissing': 'Cardano parser 未載入',
+    'msg.cardanoTxParseFail': '無法解析為 Cardano Tx/TxBody: {err}',
+    'msg.cardanoTxUnparseable': '無法解析 Cardano 交易',
+    'msg.fromUnknown': 'unknown (需額外 UTXO 資料)',
+    'msg.sigNoStandardFields': '未在 payload 中識別出標準 signature/publicKey/requestId 欄位。'
+  },
+  en: {
+    'app.title': 'BC-UR Fountain Viewer',
+    'hero.title': 'BC-UR Fountain Viewer',
+    'hero.subtitle': 'Scan UR QR (including fountain fragments) with your camera and decode instantly.',
+    'controls.camera': 'Camera Source',
+    'controls.language': 'Language',
+    'controls.start': 'Start Scan',
+    'controls.stop': 'Stop Scan',
+    'controls.reset': 'Reset Decoder',
+    'status.idle': 'Camera not started.',
+    'status.done': 'Decoding completed.',
+    'status.failDecode': 'Decoding failed: {err}',
+    'status.noCamera': 'No camera device found.',
+    'status.readCameraFail': 'Failed to read camera list.',
+    'status.initPending': 'Initializing, please wait.',
+    'status.startingCamera': 'Starting camera...',
+    'status.cameraReady': 'Camera started. Point the lens at BC-UR QR.',
+    'status.cameraStartFail': 'Failed to start camera. Check permissions or HTTPS/localhost.',
+    'status.stopped': 'Scanning stopped.',
+    'status.resetDone': 'Decoder reset.',
+    'status.scanWaiting': 'Scanning, waiting for new fragments.',
+    'status.initFail': 'Initialization failed. Please refresh.',
+    'progress.title': 'Decode Progress',
+    'progress.none': 'No fragment received yet.',
+    'progress.collected': 'Collected {received} / {expected} fragments',
+    'raw.title': 'Decoded Result (Raw Data)',
+    'raw.urType': 'UR Type',
+    'raw.decodedPayload': 'Decoded Payload (JSON / UTF-8)',
+    'raw.cborHex': 'CBOR Hex',
+    'raw.cborBase64': 'CBOR Base64',
+    'cardano.title': 'Cardano Transaction Details',
+    'cardano.txDetails': 'Tx Details',
+    'cardano.txHex': 'Cardano Tx (Hex)',
+    'logs.title': 'Scan Logs',
+    'camera.notFoundOption': 'No camera device found',
+    'camera.defaultLabel': 'Camera {index}',
+    'camera.notSupportedEnum': 'This browser does not support enumerateDevices',
+    'camera.notSupportedMedia': 'This browser does not support getUserMedia',
+    'log.reset': 'Decoder reset.',
+    'log.signatureDetected': 'cardano-signature detected; switched to signature parsing.',
+    'log.extractTx': 'Cardano Tx extracted, source path={path}, length={length} bytes',
+    'log.noCardanoTx': 'No recognizable Cardano transaction bytes found in payload.',
+    'log.decodeSuccess': 'Decode success, UR type={type}, CBOR length={length} bytes',
+    'log.partRejected': 'UR fragment received but rejected (possibly invalid format).',
+    'log.partReceived': 'Fragment received: {part}...',
+    'log.decodeFail': 'Decoding failed: {err}',
+    'log.partError': 'Fragment handling error: {err}',
+    'log.listCameraFail': 'Failed to list cameras: {err}',
+    'log.scanError': 'Scan error: {err}',
+    'log.cameraRetry': 'Selected camera failed, retrying with default camera: {err}',
+    'log.scanStarted': 'Scanning started.',
+    'log.cameraStartFail': 'Camera start failed: {err}',
+    'log.scanStopped': 'Scanning stopped.',
+    'log.initFail': 'Initialization failed: {err}',
+    'msg.unreadableUtf8': '[Non-printable UTF-8 text, please use Hex/Base64]',
+    'msg.invalidUtf8': '[Cannot decode as UTF-8, please use Hex/Base64]',
+    'msg.nonSerializablePayload': '[Composite payload cannot be directly serialized]',
+    'msg.unknownError': 'Unknown error',
+    'msg.cardanoParserMissing': 'Cardano parser not loaded',
+    'msg.cardanoTxParseFail': 'Cannot parse as Cardano Tx/TxBody: {err}',
+    'msg.cardanoTxUnparseable': 'Cannot parse Cardano transaction',
+    'msg.fromUnknown': 'unknown (requires additional UTXO context)',
+    'msg.sigNoStandardFields': 'No standard signature/publicKey/requestId field identified in payload.'
+  }
+};
+
+function resolveLang(lang) {
+  return lang === 'en' ? 'en' : 'zh-TW';
+}
+
+function t(key, vars = {}) {
+  const table = I18N[currentLang] || I18N['zh-TW'];
+  const template = table[key] || I18N.en[key] || key;
+  return template.replace(/\{(\w+)\}/g, (_, name) => String(vars[name] ?? `{${name}}`));
+}
+
+function applyI18nToDom() {
+  document.documentElement.lang = currentLang === 'en' ? 'en' : 'zh-Hant';
+  document.title = t('app.title');
+  document.querySelectorAll('[data-i18n]').forEach((node) => {
+    const key = node.getAttribute('data-i18n');
+    if (!key) return;
+    node.textContent = t(key);
+  });
+  if (!urDecoder) {
+    el.partStats.textContent = t('progress.none');
+  }
+}
+
+function setLanguage(lang) {
+  currentLang = resolveLang(lang);
+  localStorage.setItem('bcur_lang', currentLang);
+  el.languageSelect.value = currentLang;
+  applyI18nToDom();
+}
 
 function setStatus(message) {
   el.status.textContent = message;
@@ -44,7 +207,7 @@ function setStatus(message) {
 
 function log(message) {
   const now = new Date();
-  const stamp = now.toLocaleTimeString('zh-TW', { hour12: false });
+  const stamp = now.toLocaleTimeString(currentLang, { hour12: false });
   el.logBox.textContent = `[${stamp}] ${message}\n${el.logBox.textContent}`.slice(0, 6000);
 }
 
@@ -52,7 +215,7 @@ function updateProgress() {
   if (!urDecoder) {
     el.progressText.textContent = '0%';
     el.progressFill.style.width = '0%';
-    el.partStats.textContent = '尚未收到任何 fragment。';
+    el.partStats.textContent = t('progress.none');
     return;
   }
 
@@ -69,7 +232,7 @@ function updateProgress() {
   const received = urDecoder.receivedPartIndexes?.().length ?? 0;
   const expected = urDecoder.expectedPartCount?.() ?? 0;
   const expectedLabel = expected > 0 ? expected : '?';
-  el.partStats.textContent = `已收集 ${received} / ${expectedLabel} 個 fragment`;
+  el.partStats.textContent = t('progress.collected', { received, expected: expectedLabel });
 }
 
 function clearResult() {
@@ -89,7 +252,7 @@ function resetDecoder() {
   seenParts.clear();
   updateProgress();
   clearResult();
-  log('已重置解碼器。');
+  log(t('log.reset'));
 }
 
 function parseDecodedBuffer(buf) {
@@ -101,9 +264,9 @@ function parseDecodedBuffer(buf) {
   try {
     utf8Text = new TextDecoder().decode(bytes);
     const printable = /^[\u0009\u000a\u000d\u0020-\u007e\u00a0-\uffff]*$/.test(utf8Text);
-    if (!printable) utf8Text = '[非可讀 UTF-8 文字，請改看 Hex/Base64]';
+    if (!printable) utf8Text = t('msg.unreadableUtf8');
   } catch {
-    utf8Text = '[無法轉成 UTF-8，請改看 Hex/Base64]';
+    utf8Text = t('msg.invalidUtf8');
   }
 
   return { hex, base64, utf8Text };
@@ -382,7 +545,7 @@ function extractMultiAsset(value) {
 
 function parseCardanoTx(bytes, payloadContext = null) {
   if (!CSL) {
-    return { error: 'Cardano parser 未載入' };
+    return { error: t('msg.cardanoParserMissing') };
   }
 
   const txBytes = Uint8Array.from(bytes);
@@ -399,7 +562,7 @@ function parseCardanoTx(bytes, payloadContext = null) {
       parsedAs = 'TransactionBody';
     } catch (error) {
       return {
-        error: `無法解析為 Cardano Tx/TxBody: ${error instanceof Error ? error.message : String(error)}`
+        error: t('msg.cardanoTxParseFail', { err: error instanceof Error ? error.message : String(error) })
       };
     }
   }
@@ -487,7 +650,7 @@ function parseCardanoTx(bytes, payloadContext = null) {
 
 function formatCardanoTxDetails(details) {
   if (!details || details.error) {
-    return details?.error || '無法解析 Cardano 交易';
+    return details?.error || t('msg.cardanoTxUnparseable');
   }
   const lines = [];
   lines.push(`Parsed As: ${details.parsedAs}`);
@@ -496,7 +659,7 @@ function formatCardanoTxDetails(details) {
   lines.push(`Fee: ${details.feeLovelace} lovelace (${details.feeAda || 'N/A'})`);
   lines.push(`Input Total: ${details.inputTotalLovelace ?? 'unknown'}${details.inputTotalAda ? ` (${details.inputTotalAda})` : ''}`);
   lines.push(`Output Total: ${details.outputTotalLovelace} (${details.outputTotalAda || 'N/A'})`);
-  lines.push(`From: ${details.fromAddresses?.length ? details.fromAddresses.join(', ') : 'unknown (需額外 UTXO 資料)'}`);
+  lines.push(`From: ${details.fromAddresses?.length ? details.fromAddresses.join(', ') : t('msg.fromUnknown')}`);
   lines.push(`To: ${details.toAddresses?.length ? details.toAddresses.join(', ') : 'unknown'}`);
   if (details.ttl != null) lines.push(`TTL: ${details.ttl}`);
   if (details.validityStartInterval != null) lines.push(`Valid From: ${details.validityStartInterval}`);
@@ -816,7 +979,7 @@ function formatCardanoSignatureDetails(payload) {
     }
   }
   if (!parts.signature && !parts.publicKey && !parts.requestId) {
-    lines.push('未在 payload 中識別出標準 signature/publicKey/requestId 欄位。');
+    lines.push(t('msg.sigNoStandardFields'));
   }
   return {
     summary: lines.join('\n'),
@@ -914,7 +1077,7 @@ function handleURSuccess() {
     try {
       utf8Text = JSON.stringify(decoded, bufferJsonReplacer, 2);
     } catch {
-      utf8Text = '[此 UR payload 為複合資料，無法直接序列化]';
+      utf8Text = t('msg.nonSerializablePayload');
     }
   }
 
@@ -932,18 +1095,18 @@ function handleURSuccess() {
       const sig = formatCardanoSignatureDetails(decoded);
       el.cardanoTx.value = sig.signatureHex;
       el.cardanoTxDetails.value = sig.summary;
-      log('偵測到 cardano-signature，已改用簽章資料解析。');
+      log(t('log.signatureDetected'));
     } else {
       const txCandidate = findCardanoTxBytes(decoded);
       if (txCandidate) {
         el.cardanoTx.value = txCandidate.bytes.toString('hex');
         const txDetails = parseCardanoTx(txCandidate.bytes, decoded);
         el.cardanoTxDetails.value = formatCardanoTxDetails(txDetails);
-        log(`已抽取 Cardano Tx，來源路徑=${txCandidate.path.join('.') || '(root)'}，長度=${txCandidate.bytes.length} bytes`);
+        log(t('log.extractTx', { path: txCandidate.path.join('.') || '(root)', length: txCandidate.bytes.length }));
       } else {
         el.cardanoTx.value = '';
         el.cardanoTxDetails.value = '';
-        log('未在 Cardano payload 找到可辨識的交易 bytes。');
+        log(t('log.noCardanoTx'));
       }
     }
   } else {
@@ -953,8 +1116,8 @@ function handleURSuccess() {
     el.cardanoTxDetails.value = '';
   }
 
-  setStatus('解碼完成。');
-  log(`解碼成功，UR type=${ur.type}，CBOR 長度=${ur.cbor.length} bytes`);
+  setStatus(t('status.done'));
+  log(t('log.decodeSuccess', { type: ur.type, length: ur.cbor.length }));
 }
 
 function handlePart(rawText) {
@@ -969,23 +1132,23 @@ function handlePart(rawText) {
     if (!urDecoder || !qrReader) return;
     const accepted = urDecoder.receivePart(normalized);
     if (!accepted) {
-      log('收到 UR 片段，但解碼器未接受（可能格式不符）。');
+      log(t('log.partRejected'));
       return;
     }
     updateProgress();
-    log(`收到片段：${part.slice(0, 52)}...`);
+    log(t('log.partReceived', { part: part.slice(0, 52) }));
 
     if (urDecoder.isComplete()) {
       if (urDecoder.isSuccess()) {
         handleURSuccess();
       } else {
-        const err = urDecoder.resultError?.() || '未知錯誤';
-        setStatus(`解碼失敗：${err}`);
-        log(`解碼失敗：${err}`);
+        const err = urDecoder.resultError?.() || t('msg.unknownError');
+        setStatus(t('status.failDecode', { err }));
+        log(t('log.decodeFail', { err }));
       }
     }
   } catch (error) {
-    log(`片段處理錯誤：${error instanceof Error ? error.message : String(error)}`);
+    log(t('log.partError', { err: error instanceof Error ? error.message : String(error) }));
   }
 }
 
@@ -999,32 +1162,32 @@ async function listCameras() {
       const allDevices = await navigator.mediaDevices.enumerateDevices();
       devices = allDevices.filter((d) => d.kind === 'videoinput');
     } else {
-      throw new Error('此瀏覽器不支援 enumerateDevices');
+      throw new Error(t('camera.notSupportedEnum'));
     }
 
     el.cameraSelect.innerHTML = '';
     for (const [index, device] of devices.entries()) {
       const option = document.createElement('option');
       option.value = device.deviceId;
-      option.textContent = device.label || `Camera ${index + 1}`;
+      option.textContent = device.label || t('camera.defaultLabel', { index: index + 1 });
       el.cameraSelect.appendChild(option);
     }
     if (!devices.length) {
       const option = document.createElement('option');
       option.value = '';
-      option.textContent = '找不到可用鏡頭';
+      option.textContent = t('camera.notFoundOption');
       el.cameraSelect.appendChild(option);
-      setStatus('找不到可用鏡頭。');
+      setStatus(t('status.noCamera'));
     }
   } catch (error) {
-    setStatus('讀取鏡頭列表失敗。');
-    log(`無法列出鏡頭：${error instanceof Error ? error.message : String(error)}`);
+    setStatus(t('status.readCameraFail'));
+    log(t('log.listCameraFail', { err: error instanceof Error ? error.message : String(error) }));
   }
 }
 
 async function ensureCameraPermission() {
   if (!navigator.mediaDevices?.getUserMedia) {
-    throw new Error('此瀏覽器不支援 getUserMedia');
+    throw new Error(t('camera.notSupportedMedia'));
   }
   const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
   stream.getTracks().forEach((t) => t.stop());
@@ -1078,7 +1241,7 @@ async function startDecodeLoop(deviceId) {
       const isNotFound =
         typeof NotFoundExceptionClass === 'function' && error instanceof NotFoundExceptionClass;
       if (isNotFound) return;
-      log(`掃描錯誤：${error.message || String(error)}`);
+      log(t('log.scanError', { err: error.message || String(error) }));
     }
   });
 }
@@ -1086,7 +1249,7 @@ async function startDecodeLoop(deviceId) {
 async function startScan() {
   if (scanning) return;
   if (!qrReader || !urDecoder) {
-    setStatus('初始化中，請稍候再試。');
+    setStatus(t('status.initPending'));
     return;
   }
   const selectedDeviceId = el.cameraSelect.value || null;
@@ -1099,25 +1262,25 @@ async function startScan() {
     el.startBtn.disabled = true;
     el.stopBtn.disabled = false;
 
-    setStatus('正在啟動鏡頭...');
+    setStatus(t('status.startingCamera'));
     try {
       await startDecodeLoop(selectedDeviceId);
       await tryDisableTorchOnActiveTrack();
     } catch (firstError) {
-      log(`指定鏡頭啟動失敗，改用預設鏡頭重試：${firstError instanceof Error ? firstError.message : String(firstError)}`);
+      log(t('log.cameraRetry', { err: firstError instanceof Error ? firstError.message : String(firstError) }));
       await startDecodeLoop(null);
       await tryDisableTorchOnActiveTrack();
     }
 
-    setStatus('鏡頭已啟動，請將 BC-UR QR 對準鏡頭。');
-    log('掃描已開始。');
+    setStatus(t('status.cameraReady'));
+    log(t('log.scanStarted'));
   } catch (error) {
     qrReader?.reset();
     scanning = false;
     el.startBtn.disabled = false;
     el.stopBtn.disabled = true;
-    setStatus('鏡頭啟動失敗，請確認權限或 HTTPS/localhost。');
-    log(`鏡頭啟動失敗：${error instanceof Error ? error.message : String(error)}`);
+    setStatus(t('status.cameraStartFail'));
+    log(t('log.cameraStartFail', { err: error instanceof Error ? error.message : String(error) }));
   }
 }
 
@@ -1127,15 +1290,15 @@ function stopScan() {
   scanning = false;
   el.startBtn.disabled = false;
   el.stopBtn.disabled = true;
-  setStatus('已停止掃描。');
-  log('掃描已停止。');
+  setStatus(t('status.stopped'));
+  log(t('log.scanStopped'));
 }
 
 el.startBtn.addEventListener('click', startScan);
 el.stopBtn.addEventListener('click', stopScan);
 el.resetBtn.addEventListener('click', () => {
   resetDecoder();
-  setStatus(scanning ? '掃描中，等待新片段。' : '已重置解碼。');
+  setStatus(scanning ? t('status.scanWaiting') : t('status.resetDone'));
 });
 
 window.addEventListener('beforeunload', () => {
@@ -1158,6 +1321,14 @@ async function bootstrap() {
   qrReader = new BrowserQRCodeReaderClass();
   urDecoder = new URDecoderClass();
 
+  const storedLang = localStorage.getItem('bcur_lang');
+  const navLang = (navigator.language || '').toLowerCase().startsWith('en') ? 'en' : 'zh-TW';
+  setLanguage(resolveLang(storedLang || navLang));
+  el.languageSelect.addEventListener('change', (event) => {
+    const next = event.target?.value || 'zh-TW';
+    setLanguage(next);
+  });
+
   updateProgress();
   clearResult();
   bindOverlayDismiss();
@@ -1166,6 +1337,6 @@ async function bootstrap() {
 }
 
 bootstrap().catch((error) => {
-  setStatus('初始化失敗，請重整頁面。');
-  log(`初始化失敗：${error instanceof Error ? error.message : String(error)}`);
+  setStatus(t('status.initFail'));
+  log(t('log.initFail', { err: error instanceof Error ? error.message : String(error) }));
 });
