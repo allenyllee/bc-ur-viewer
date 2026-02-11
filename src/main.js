@@ -133,8 +133,7 @@ function tryParseHexString(value) {
   return null;
 }
 
-function findCardanoTxBytes(payload) {
-  const keyHints = ['tx', 'transaction', 'txbody', 'body', 'sign_data', 'signdata', 'payload', 'request'];
+function findCardanoBytesByHints(payload, keyHints, minBytes = 20) {
   const candidates = [];
 
   function scorePath(path) {
@@ -155,7 +154,7 @@ function findCardanoTxBytes(payload) {
     } else {
       bytes = tryParseHexString(value);
     }
-    if (!bytes || bytes.length < 20) return;
+    if (!bytes || bytes.length < minBytes) return;
     candidates.push({ bytes, path, score: scorePath(path) + Math.min(3, Math.floor(bytes.length / 200)) });
   }
 
@@ -188,6 +187,33 @@ function findCardanoTxBytes(payload) {
 
   candidates.sort((a, b) => b.score - a.score || b.bytes.length - a.bytes.length);
   return candidates[0];
+}
+
+function findCardanoTxBytes(payload) {
+  return findCardanoBytesByHints(
+    payload,
+    ['tx', 'transaction', 'txbody', 'body', 'sign_data', 'signdata', 'payload', 'request'],
+    20
+  );
+}
+
+function findCardanoSignatureParts(payload) {
+  const signature = findCardanoBytesByHints(
+    payload,
+    ['signature', 'sig', 'witness', 'cose', 'proof'],
+    32
+  );
+  const publicKey = findCardanoBytesByHints(
+    payload,
+    ['public', 'pub', 'key'],
+    16
+  );
+  const requestId = findCardanoBytesByHints(
+    payload,
+    ['request', 'requestid', 'id'],
+    8
+  );
+  return { signature, publicKey, requestId };
 }
 
 function decodeAsciiSafe(bytes) {
@@ -456,6 +482,32 @@ function formatCardanoTxDetails(details) {
   return lines.join('\n');
 }
 
+function formatCardanoSignatureDetails(payload) {
+  const parts = findCardanoSignatureParts(payload);
+  const lines = [];
+  lines.push('Parsed As: Cardano Signature');
+  lines.push(`Signature: ${parts.signature ? `${parts.signature.bytes.length} bytes` : 'not found'}`);
+  lines.push(`Public Key: ${parts.publicKey ? `${parts.publicKey.bytes.length} bytes` : 'not found'}`);
+  lines.push(`Request ID: ${parts.requestId ? `${parts.requestId.bytes.length} bytes` : 'not found'}`);
+  lines.push('');
+  if (parts.signature) {
+    lines.push(`signature.hex = ${parts.signature.bytes.toString('hex')}`);
+  }
+  if (parts.publicKey) {
+    lines.push(`publicKey.hex = ${parts.publicKey.bytes.toString('hex')}`);
+  }
+  if (parts.requestId) {
+    lines.push(`requestId.hex = ${parts.requestId.bytes.toString('hex')}`);
+  }
+  if (!parts.signature && !parts.publicKey && !parts.requestId) {
+    lines.push('未在 payload 中識別出標準 signature/publicKey/requestId 欄位。');
+  }
+  return {
+    summary: lines.join('\n'),
+    signatureHex: parts.signature ? parts.signature.bytes.toString('hex') : ''
+  };
+}
+
 function handleURSuccess() {
   const ur = urDecoder.resultUR();
   const decoded = ur.decodeCBOR();
@@ -480,8 +532,15 @@ function handleURSuccess() {
   el.decodedHex.value = cborView.hex;
   el.decodedBase64.value = cborView.base64;
 
-  const isCardanoUr = typeof ur.type === 'string' && ur.type.toLowerCase().startsWith('cardano-');
+  const urType = typeof ur.type === 'string' ? ur.type.toLowerCase() : '';
+  const isCardanoUr = urType.startsWith('cardano-');
   if (isCardanoUr) {
+    if (urType === 'cardano-signature') {
+      const sig = formatCardanoSignatureDetails(decoded);
+      el.cardanoTx.value = sig.signatureHex;
+      el.cardanoTxDetails.value = sig.summary;
+      log('偵測到 cardano-signature，已改用簽章資料解析。');
+    } else {
     const txCandidate = findCardanoTxBytes(decoded);
     if (txCandidate) {
       el.cardanoTx.value = txCandidate.bytes.toString('hex');
@@ -492,6 +551,7 @@ function handleURSuccess() {
       el.cardanoTx.value = '';
       el.cardanoTxDetails.value = '';
       log('未在 Cardano payload 找到可辨識的交易 bytes。');
+    }
     }
   } else {
     el.cardanoTx.value = '';
