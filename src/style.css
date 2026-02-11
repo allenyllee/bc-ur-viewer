@@ -47,6 +47,24 @@ body.modal-open {
   color: var(--muted);
 }
 
+.hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.hero-tools {
+  display: grid;
+  gap: 6px;
+  min-width: 150px;
+}
+
+.hero-tools label {
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
 .card {
   background: var(--card);
   border: 1px solid var(--border);
@@ -255,6 +273,17 @@ pre {
     align-self: start;
     position: sticky;
     top: 12px;
+  }
+}
+
+@media (max-width: 720px) {
+  .hero {
+    flex-direction: column;
+  }
+
+  .hero-tools {
+    width: 100%;
+    max-width: 280px;
   }
 }
 
