@@ -47,6 +47,8 @@ const I18N = {
     'hero.subtitle': '啟動相機後掃描 UR QR（含多片 fountain code）並即時解析。',
     'controls.camera': '鏡頭來源',
     'controls.language': '語言',
+    'controls.github': 'GitHub 專案',
+    'controls.forkRibbon': 'Fork me on GitHub',
     'controls.start': '啟動掃描',
     'controls.stop': '停止掃描',
     'controls.reset': '重置解碼',
@@ -111,6 +113,8 @@ const I18N = {
     'hero.subtitle': 'Scan UR QR (including fountain fragments) with your camera and decode instantly.',
     'controls.camera': 'Camera Source',
     'controls.language': 'Language',
+    'controls.github': 'GitHub Repository',
+    'controls.forkRibbon': 'Fork me on GitHub',
     'controls.start': 'Start Scan',
     'controls.stop': 'Stop Scan',
     'controls.reset': 'Reset Decoder',
@@ -188,6 +192,16 @@ function applyI18nToDom() {
     const key = node.getAttribute('data-i18n');
     if (!key) return;
     node.textContent = t(key);
+  });
+  document.querySelectorAll('[data-i18n-title]').forEach((node) => {
+    const key = node.getAttribute('data-i18n-title');
+    if (!key) return;
+    node.setAttribute('title', t(key));
+  });
+  document.querySelectorAll('[data-i18n-aria-label]').forEach((node) => {
+    const key = node.getAttribute('data-i18n-aria-label');
+    if (!key) return;
+    node.setAttribute('aria-label', t(key));
   });
   if (!urDecoder) {
     el.partStats.textContent = t('progress.none');

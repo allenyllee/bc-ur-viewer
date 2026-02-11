@@ -65,6 +65,81 @@ body.modal-open {
   color: var(--muted);
 }
 
+.github-ribbon {
+  position: fixed;
+  top: 34px;
+  right: -52px;
+  width: 200px;
+  padding: 10px 0 7px;
+  z-index: 95;
+  color: #fff;
+  background: #151513;
+  text-align: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow: none;
+  text-decoration: none;
+  text-transform: uppercase;
+  white-space: nowrap;
+  transform: rotate(45deg);
+  transform-origin: center;
+  overflow: visible;
+}
+
+.github-ribbon:hover {
+  background: #2b2b2b;
+}
+
+.github-ribbon-label {
+  display: block;
+}
+
+.github-ribbon-octocat {
+  position: absolute;
+  left: 66%;
+  top: -11%;
+  transform-origin: 50% 100%;
+  transform: translate(-50%, -50%) rotate(-46deg);
+  width: 98px;
+  height: 98px;
+  overflow: visible;
+  pointer-events: none;
+  filter: drop-shadow(-2px -3px 4px rgba(0, 0, 0, 0.55));
+}
+
+.github-ribbon-octocat .octo-body,
+.github-ribbon-octocat .octo-arm {
+  fill: #fff;
+}
+
+.github-ribbon-octocat .octo-arm {
+  transform-origin: 130px 106px;
+  transform-box: view-box;
+  animation: octo-wave 1.8s ease-in-out infinite;
+}
+
+@keyframes octo-wave {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  20%,
+  60% {
+    transform: rotate(-24deg);
+  }
+  40%,
+  80% {
+    transform: rotate(10deg);
+  }
+}
+
+.github-ribbon:focus-visible {
+  outline: 2px solid var(--accent-2);
+  outline-offset: 2px;
+}
+
 .card {
   background: var(--card);
   border: 1px solid var(--border);
@@ -277,6 +352,20 @@ pre {
 }
 
 @media (max-width: 720px) {
+  .github-ribbon {
+    top: 28px;
+    right: -60px;
+    width: 188px;
+    font-size: 0.62rem;
+  }
+
+  .github-ribbon-octocat {
+    left: 65%;
+    top: -10%;
+    width: 82px;
+    height: 82px;
+  }
+
   .hero {
     flex-direction: column;
   }
