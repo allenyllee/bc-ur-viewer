@@ -1,0 +1,23 @@
+{
+  "name": "bc-ur-viewer",
+  "version": "1.0.0",
+  "description": "Static web app for scanning and decoding BC-UR fountain codes",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@ngraveio/bc-ur": "^1.1.13",
+    "@zxing/library": "^0.21.3",
+    "buffer": "^6.0.3"
+  },
+  "devDependencies": {
+    "vite": "^5.4.19"
+  }
+}
