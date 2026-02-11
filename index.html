@@ -24,12 +24,12 @@
         <p id="status" class="status">尚未啟動鏡頭。</p>
       </section>
 
-      <section class="card viewer">
-        <video id="video" autoplay playsinline muted></video>
-      </section>
+      <section class="scan-stage">
+        <section class="card viewer">
+          <video id="video" autoplay playsinline muted></video>
+        </section>
 
-      <section class="dashboard">
-        <section class="card progress panel-left">
+        <section class="card progress">
           <h2>解碼進度</h2>
           <p id="progressText">0%</p>
           <div class="progress-bar">
@@ -37,7 +37,9 @@
           </div>
           <p id="partStats">尚未收到任何 fragment。</p>
         </section>
+      </section>
 
+      <section class="dashboard">
         <section class="card output panel-center">
           <h2>Cardano 交易解析</h2>
           <div class="kv">

@@ -107,8 +107,8 @@ button:disabled {
   width: 100%;
   border-radius: 12px;
   background: #0a0e11;
-  min-height: 240px;
-  max-height: 420px;
+  min-height: 260px;
+  max-height: 460px;
   object-fit: cover;
 }
 
@@ -119,6 +119,11 @@ button:disabled {
 }
 
 .dashboard {
+  display: grid;
+  gap: 16px;
+}
+
+.scan-stage {
   display: grid;
   gap: 16px;
 }
@@ -171,7 +176,7 @@ textarea {
 
 pre {
   margin: 0;
-  max-height: 220px;
+  max-height: 420px;
   overflow: auto;
   background: #0e1a2a;
   color: #d6e6ff;
@@ -181,33 +186,43 @@ pre {
 }
 
 @media (min-width: 860px) {
-  .app {
-    grid-template-columns: 1fr 1fr;
-  }
-
   .hero,
   .controls,
-  .viewer,
+  .scan-stage,
   .dashboard {
     grid-column: 1 / -1;
+  }
+
+  .scan-stage {
+    grid-template-columns: minmax(560px, 1.8fr) minmax(260px, 1fr);
+    align-items: stretch;
+  }
+
+  .scan-stage .viewer video {
+    height: 100%;
+    min-height: 320px;
+  }
+
+  .scan-stage .progress {
+    align-self: start;
+    position: sticky;
+    top: 12px;
   }
 }
 
 @media (min-width: 1180px) {
   .dashboard {
-    grid-template-columns: minmax(220px, 1fr) minmax(460px, 1.6fr) minmax(220px, 1fr);
+    grid-template-columns: minmax(560px, 1.6fr) minmax(300px, 1fr);
     align-items: start;
   }
 
-  .panel-left {
+  .panel-center {
     grid-column: 1;
   }
 
-  .panel-center {
-    grid-column: 2;
-  }
-
   .panel-right {
-    grid-column: 3;
+    grid-column: 2;
+    position: sticky;
+    top: 12px;
   }
 }
