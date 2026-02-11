@@ -15,6 +15,7 @@ const el = {
   partStats: document.getElementById('partStats'),
   urType: document.getElementById('urType'),
   cardanoPanel: document.getElementById('cardanoPanel'),
+  overlayBackdrop: document.getElementById('overlayBackdrop'),
   cardanoTx: document.getElementById('cardanoTx'),
   cardanoTxDetails: document.getElementById('cardanoTxDetails'),
   decodedText: document.getElementById('decodedText'),
@@ -32,6 +33,7 @@ let qrReader = null;
 let scanning = false;
 let urDecoder = null;
 const seenParts = new Set();
+let cardanoOverlayOpen = false;
 
 function setStatus(message) {
   el.status.textContent = message;
@@ -75,6 +77,7 @@ function clearResult() {
   el.decodedHex.value = '';
   el.decodedBase64.value = '';
   el.cardanoPanel.classList.add('hidden');
+  closeCardanoOverlay();
 }
 
 function resetDecoder() {
@@ -515,6 +518,44 @@ function setCardanoPanelVisible(visible) {
     el.cardanoPanel.classList.remove('hidden');
   } else {
     el.cardanoPanel.classList.add('hidden');
+    closeCardanoOverlay();
+  }
+}
+
+function openCardanoOverlay() {
+  if (cardanoOverlayOpen) return;
+  cardanoOverlayOpen = true;
+  document.body.classList.add('modal-open');
+  el.overlayBackdrop.classList.remove('hidden');
+  el.cardanoPanel.classList.add('overlay-open');
+}
+
+function closeCardanoOverlay() {
+  if (!cardanoOverlayOpen) return;
+  cardanoOverlayOpen = false;
+  document.body.classList.remove('modal-open');
+  el.overlayBackdrop.classList.add('hidden');
+  el.cardanoPanel.classList.remove('overlay-open');
+}
+
+function bindOverlayDismiss() {
+  el.overlayBackdrop.addEventListener('click', () => {
+    closeCardanoOverlay();
+  });
+  window.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      closeCardanoOverlay();
+    }
+  });
+}
+
+function shouldAutoOpenCardanoOverlay() {
+  return !cardanoOverlayOpen;
+}
+
+function maybeOpenCardanoOverlay() {
+  if (shouldAutoOpenCardanoOverlay()) {
+    openCardanoOverlay();
   }
 }
 
@@ -546,6 +587,7 @@ function handleURSuccess() {
   const isCardanoUr = urType.startsWith('cardano-');
   if (isCardanoUr) {
     setCardanoPanelVisible(true);
+    maybeOpenCardanoOverlay();
     if (urType === 'cardano-signature') {
       const sig = formatCardanoSignatureDetails(decoded);
       el.cardanoTx.value = sig.signatureHex;
@@ -775,6 +817,7 @@ async function bootstrap() {
 
   updateProgress();
   clearResult();
+  bindOverlayDismiss();
   await listCameras();
 }
 
