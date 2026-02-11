@@ -29,6 +29,7 @@ let BrowserQRCodeReaderClass = null;
 let NotFoundExceptionClass = null;
 let URDecoderClass = null;
 let CSL = null;
+let cborSyncLib = null;
 
 let qrReader = null;
 let scanning = false;
@@ -490,28 +491,303 @@ function formatCardanoTxDetails(details) {
 }
 
 function formatCardanoSignatureDetails(payload) {
+  function asBuffer(value) {
+    if (Buffer.isBuffer(value)) return value;
+    if (value instanceof Uint8Array) return Buffer.from(value);
+    if (
+      value &&
+      typeof value === 'object' &&
+      value.type === 'Buffer' &&
+      Array.isArray(value.data)
+    ) {
+      return Buffer.from(value.data);
+    }
+    return null;
+  }
+
+  function getByNumericKey(node, keyNum) {
+    if (!node || typeof node !== 'object') return null;
+    if (node instanceof Map) {
+      if (node.has(keyNum)) return node.get(keyNum);
+      if (node.has(String(keyNum))) return node.get(String(keyNum));
+      return null;
+    }
+    if (Object.prototype.hasOwnProperty.call(node, keyNum)) return node[keyNum];
+    if (Object.prototype.hasOwnProperty.call(node, String(keyNum))) return node[String(keyNum)];
+    return null;
+  }
+
+  function extractKnownCardanoSignatureFields(node) {
+    const requestId = asBuffer(getByNumericKey(node, 1));
+    const signatureEnvelope = asBuffer(getByNumericKey(node, 2)) || getByNumericKey(node, 2);
+    return { requestId, signatureEnvelope };
+  }
+
+  const known = extractKnownCardanoSignatureFields(payload);
   const parts = findCardanoSignatureParts(payload);
+
+  function safeDecodeCbor(bytes) {
+    if (!cborSyncLib) return null;
+    try {
+      return cborSyncLib.decode(Buffer.from(bytes));
+    } catch {
+      return null;
+    }
+  }
+
+  function toHexIfBytes(value) {
+    if (Buffer.isBuffer(value)) return value.toString('hex');
+    if (value instanceof Uint8Array) return Buffer.from(value).toString('hex');
+    return null;
+  }
+
+  function normalizeHeaderMap(value) {
+    if (!value) return {};
+    if (value instanceof Map) {
+      const out = {};
+      for (const [k, v] of value.entries()) {
+        const key = typeof k === 'number' ? String(k) : String(k);
+        out[key] = toHexIfBytes(v) || v;
+      }
+      return out;
+    }
+    if (typeof value === 'object') {
+      const out = {};
+      for (const [k, v] of Object.entries(value)) {
+        out[k] = toHexIfBytes(v) || v;
+      }
+      return out;
+    }
+    return { value };
+  }
+
+  function parseCoseSign1(bytes) {
+    let decoded = safeDecodeCbor(bytes);
+    
+    function unwrapToSign1(value, depth = 0) {
+      if (depth > 6 || value == null) return null;
+      if (Array.isArray(value) && value.length === 4) return value;
+
+      if (value && typeof value === 'object') {
+        const maybeTag = value.tag ?? value.tagNumber;
+        const maybeValue = value.value;
+        if ((maybeTag === 18 || maybeTag === '18') && maybeValue != null) {
+          const tagged = unwrapToSign1(maybeValue, depth + 1);
+          if (tagged) return tagged;
+        }
+
+        if (value instanceof Map) {
+          if (value.has(0) || value.has('0')) {
+            const direct = unwrapToSign1(value.get(0) ?? value.get('0'), depth + 1);
+            if (direct) return direct;
+          }
+          for (const v of value.values()) {
+            const nested = unwrapToSign1(v, depth + 1);
+            if (nested) return nested;
+          }
+        } else {
+          if (Object.prototype.hasOwnProperty.call(value, 0) || Object.prototype.hasOwnProperty.call(value, '0')) {
+            const direct = unwrapToSign1(value[0] ?? value['0'], depth + 1);
+            if (direct) return direct;
+          }
+          for (const v of Object.values(value)) {
+            const nested = unwrapToSign1(v, depth + 1);
+            if (nested) return nested;
+          }
+        }
+      }
+      return null;
+    }
+
+    decoded = unwrapToSign1(decoded);
+    if (!Array.isArray(decoded) || decoded.length !== 4) return null;
+
+    const [protectedBytes, unprotectedHeaders, payloadBytes, signature] = decoded;
+    const protectedDecoded =
+      (Buffer.isBuffer(protectedBytes) || protectedBytes instanceof Uint8Array) && protectedBytes.length > 0
+        ? safeDecodeCbor(protectedBytes)
+        : null;
+
+    const payloadBuffer =
+      Buffer.isBuffer(payloadBytes) || payloadBytes instanceof Uint8Array
+        ? Buffer.from(payloadBytes)
+        : null;
+    const payloadUtf8 = payloadBuffer ? decodeAsciiSafe(payloadBuffer) : '';
+    const payloadCbor = payloadBuffer ? safeDecodeCbor(payloadBuffer) : null;
+    const sigBuffer =
+      Buffer.isBuffer(signature) || signature instanceof Uint8Array ? Buffer.from(signature) : null;
+
+    return {
+      protectedHeaders: normalizeHeaderMap(protectedDecoded),
+      unprotectedHeaders: normalizeHeaderMap(unprotectedHeaders),
+      payloadHex: payloadBuffer ? payloadBuffer.toString('hex') : '',
+      payloadUtf8: payloadUtf8 || null,
+      payloadCbor:
+        payloadCbor && typeof payloadCbor === 'object'
+          ? JSON.stringify(payloadCbor, bufferJsonReplacer, 2)
+          : payloadCbor ?? null,
+      signatureHex: sigBuffer ? sigBuffer.toString('hex') : '',
+      signatureLength: sigBuffer ? sigBuffer.length : null
+    };
+  }
+
+  function unwrapTaggedValue(value, depth = 0) {
+    if (depth > 8 || value == null) return value;
+    if (value && typeof value === 'object') {
+      const maybeTag = value.tag ?? value.tagNumber;
+      const maybeValue = value.value;
+      if (maybeTag != null && maybeValue != null) {
+        return unwrapTaggedValue(maybeValue, depth + 1);
+      }
+    }
+    return value;
+  }
+
+  function parseCardanoWitnessEnvelope(bytes) {
+    const decoded = safeDecodeCbor(bytes);
+    if (!decoded) return null;
+
+    const root = unwrapTaggedValue(decoded);
+    let container = root;
+
+    if (container instanceof Map) {
+      container = container.get(0) ?? container.get('0') ?? container;
+    } else if (typeof container === 'object' && !Array.isArray(container)) {
+      container = container[0] ?? container['0'] ?? container;
+    }
+
+    container = unwrapTaggedValue(container);
+    if (!Array.isArray(container) || container.length < 1) return null;
+
+    let witness = container[0];
+    witness = unwrapTaggedValue(witness);
+    if (!Array.isArray(witness) || witness.length < 2) return null;
+
+    const pubKey = asBuffer(witness[0]);
+    const sig = asBuffer(witness[1]);
+    if (!pubKey || !sig) return null;
+    if (pubKey.length !== 32 || sig.length !== 64) return null;
+
+    return {
+      publicKeyHex: pubKey.toString('hex'),
+      signatureHex: sig.toString('hex'),
+      publicKeyLength: pubKey.length,
+      signatureLength: sig.length
+    };
+  }
+
+  function collectByteCandidates(node, path = [], depth = 0, out = []) {
+    if (depth > 10 || node == null) return out;
+    if (Buffer.isBuffer(node) || node instanceof Uint8Array) {
+      out.push({ bytes: Buffer.from(node), path: path.join('.') || '(root)' });
+      return out;
+    }
+    if (Array.isArray(node)) {
+      node.forEach((child, idx) => collectByteCandidates(child, [...path, String(idx)], depth + 1, out));
+      return out;
+    }
+    if (node instanceof Map) {
+      for (const [k, v] of node.entries()) {
+        collectByteCandidates(v, [...path, String(k)], depth + 1, out);
+      }
+      return out;
+    }
+    if (typeof node === 'object') {
+      for (const [k, v] of Object.entries(node)) {
+        collectByteCandidates(v, [...path, k], depth + 1, out);
+      }
+    }
+    return out;
+  }
+
+  const candidates = [];
+  const knownSignatureBytes = asBuffer(known.signatureEnvelope);
+  if (knownSignatureBytes) {
+    candidates.push({ bytes: knownSignatureBytes, path: '2(signatureEnvelope)' });
+  }
+  if (parts.signature) {
+    candidates.push({ bytes: parts.signature.bytes, path: parts.signature.path?.join('.') || 'signature(heuristic)' });
+  }
+  collectByteCandidates(payload).forEach((c) => candidates.push(c));
+
+  let cose = null;
+  let coseSourcePath = '';
+  for (const candidate of candidates) {
+    if (!candidate?.bytes || candidate.bytes.length < 16) continue;
+    const parsed = parseCoseSign1(candidate.bytes);
+    if (parsed) {
+      cose = parsed;
+      coseSourcePath = candidate.path;
+      break;
+    }
+  }
+
+  const witness = knownSignatureBytes ? parseCardanoWitnessEnvelope(knownSignatureBytes) : null;
   const lines = [];
   lines.push('Parsed As: Cardano Signature');
-  lines.push(`Signature: ${parts.signature ? `${parts.signature.bytes.length} bytes` : 'not found'}`);
-  lines.push(`Public Key: ${parts.publicKey ? `${parts.publicKey.bytes.length} bytes` : 'not found'}`);
-  lines.push(`Request ID: ${parts.requestId ? `${parts.requestId.bytes.length} bytes` : 'not found'}`);
+  const requestIdBytes = known.requestId || (parts.requestId ? parts.requestId.bytes : null);
+  const publicKeyBytes = witness
+    ? Buffer.from(witness.publicKeyHex, 'hex')
+    : parts.publicKey && parts.signature && !parts.publicKey.bytes.equals(parts.signature.bytes)
+      ? parts.publicKey.bytes
+      : null;
+  const signatureBytesForDisplay = witness
+    ? Buffer.from(witness.signatureHex, 'hex')
+    : parts.signature
+      ? parts.signature.bytes
+      : null;
+  lines.push(`Signature: ${signatureBytesForDisplay ? `${signatureBytesForDisplay.length} bytes` : 'not found'}`);
+  lines.push(`Public Key: ${publicKeyBytes ? `${publicKeyBytes.length} bytes` : 'not found'}`);
+  lines.push(`Request ID: ${requestIdBytes ? `${requestIdBytes.length} bytes` : 'not found'}`);
+  if (cose) {
+    lines.push('COSE_Sign1: detected');
+    lines.push(`COSE source path: ${coseSourcePath || '(unknown)'}`);
+    const alg = cose.protectedHeaders?.['1'] ?? cose.unprotectedHeaders?.['1'];
+    if (alg !== undefined) lines.push(`Algorithm: ${alg}`);
+  } else if (witness) {
+    lines.push('COSE_Sign1: not detected');
+    lines.push('Cardano witness envelope: detected');
+  } else {
+    lines.push('COSE_Sign1: not detected');
+  }
   lines.push('');
-  if (parts.signature) {
-    lines.push(`signature.hex = ${parts.signature.bytes.toString('hex')}`);
+  if (signatureBytesForDisplay) {
+    lines.push(`signature.hex = ${signatureBytesForDisplay.toString('hex')}`);
   }
-  if (parts.publicKey) {
-    lines.push(`publicKey.hex = ${parts.publicKey.bytes.toString('hex')}`);
+  if (publicKeyBytes) {
+    lines.push(`publicKey.hex = ${publicKeyBytes.toString('hex')}`);
   }
-  if (parts.requestId) {
-    lines.push(`requestId.hex = ${parts.requestId.bytes.toString('hex')}`);
+  if (requestIdBytes) {
+    lines.push(`requestId.hex = ${requestIdBytes.toString('hex')}`);
+  }
+  if (cose) {
+    lines.push('');
+    lines.push(`cose.signature.hex = ${cose.signatureHex || '(none)'}`);
+    if (cose.signatureLength != null) lines.push(`cose.signature.length = ${cose.signatureLength}`);
+    lines.push(`cose.payload.hex = ${cose.payloadHex || '(none)'}`);
+    if (cose.payloadUtf8) {
+      lines.push(`cose.payload.utf8 = ${cose.payloadUtf8}`);
+    }
+    if (cose.payloadCbor) {
+      lines.push('cose.payload.cbor =');
+      lines.push(String(cose.payloadCbor));
+    }
+    if (Object.keys(cose.protectedHeaders || {}).length) {
+      lines.push(`protectedHeaders = ${JSON.stringify(cose.protectedHeaders)}`);
+    }
+    if (Object.keys(cose.unprotectedHeaders || {}).length) {
+      lines.push(`unprotectedHeaders = ${JSON.stringify(cose.unprotectedHeaders)}`);
+    }
   }
   if (!parts.signature && !parts.publicKey && !parts.requestId) {
     lines.push('未在 payload 中識別出標準 signature/publicKey/requestId 欄位。');
   }
   return {
     summary: lines.join('\n'),
-    signatureHex: parts.signature ? parts.signature.bytes.toString('hex') : ''
+    signatureHex:
+      (cose && cose.signatureHex) ||
+      (witness && witness.signatureHex) ||
+      (parts.signature ? parts.signature.bytes.toString('hex') : '')
   };
 }
 
@@ -582,6 +858,11 @@ function maybeAutoOpenCardanoOverlay() {
   openCardanoOverlay();
 }
 
+function maybeAutoOpenRawOverlay() {
+  if (cardanoOverlayOpen && activeOverlayPanel === el.rawPanel) return;
+  openRawOverlay();
+}
+
 function handleURSuccess() {
   const ur = urDecoder.resultUR();
   const decoded = ur.decodeCBOR();
@@ -631,6 +912,7 @@ function handleURSuccess() {
     }
   } else {
     setCardanoPanelVisible(false);
+    maybeAutoOpenRawOverlay();
     el.cardanoTx.value = '';
     el.cardanoTxDetails.value = '';
   }
@@ -825,16 +1107,18 @@ window.addEventListener('beforeunload', () => {
 });
 
 async function bootstrap() {
-  const [{ BrowserQRCodeReader, NotFoundException }, { URDecoder }, cardanoSerializationLib] = await Promise.all([
+  const [{ BrowserQRCodeReader, NotFoundException }, { URDecoder }, cardanoSerializationLib, cborSync] = await Promise.all([
     import('@zxing/library'),
     import('@ngraveio/bc-ur'),
-    import('@emurgo/cardano-serialization-lib-asmjs')
+    import('@emurgo/cardano-serialization-lib-asmjs'),
+    import('cbor-sync')
   ]);
 
   BrowserQRCodeReaderClass = BrowserQRCodeReader;
   NotFoundExceptionClass = NotFoundException;
   URDecoderClass = URDecoder;
   CSL = cardanoSerializationLib?.default || cardanoSerializationLib;
+  cborSyncLib = cborSync?.default || cborSync;
   qrReader = new BrowserQRCodeReaderClass();
   urDecoder = new URDecoderClass();
 
