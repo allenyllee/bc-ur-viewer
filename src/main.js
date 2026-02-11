@@ -239,6 +239,27 @@ function normalizeHex(value) {
   return value.toLowerCase().replace(/^0x/, '');
 }
 
+function getObjectNumericKey(node, keyNum) {
+  if (!node || typeof node !== 'object') return null;
+  if (node instanceof Map) {
+    if (node.has(keyNum)) return node.get(keyNum);
+    if (node.has(String(keyNum))) return node.get(String(keyNum));
+    return null;
+  }
+  if (Object.prototype.hasOwnProperty.call(node, keyNum)) return node[keyNum];
+  if (Object.prototype.hasOwnProperty.call(node, String(keyNum))) return node[String(keyNum)];
+  return null;
+}
+
+function asBufferLike(value) {
+  if (Buffer.isBuffer(value)) return value;
+  if (value instanceof Uint8Array) return Buffer.from(value);
+  if (value && typeof value === 'object' && value.type === 'Buffer' && Array.isArray(value.data)) {
+    return Buffer.from(value.data);
+  }
+  return null;
+}
+
 function parseLovelaceLike(value) {
   if (value == null) return null;
   if (typeof value === 'bigint') return value;
@@ -258,14 +279,29 @@ function lovelaceToAdaString(lovelaceValue) {
 }
 
 function detectUtxoFromNode(node) {
-  if (!node || typeof node !== 'object' || Array.isArray(node) || node instanceof Map) return null;
-  const txHash = normalizeHex(node.txHash || node.tx_hash || node.transactionHash || node.transaction_id || '');
-  const index = node.index ?? node.outputIndex ?? node.tx_index ?? node.output_index;
+  if (!node || typeof node !== 'object' || Array.isArray(node)) return null;
+
+  const txHashBytes =
+    asBufferLike(getObjectNumericKey(node, 1)) ||
+    asBufferLike(node.txHash) ||
+    asBufferLike(node.tx_hash) ||
+    asBufferLike(node.transactionHash) ||
+    asBufferLike(node.transaction_id);
+  const txHash = txHashBytes
+    ? txHashBytes.toString('hex')
+    : normalizeHex(node.txHash || node.tx_hash || node.transactionHash || node.transaction_id || '');
+
+  const index =
+    node.index ??
+    node.outputIndex ??
+    node.tx_index ??
+    node.output_index ??
+    getObjectNumericKey(node, 2);
   const idx = Number(index);
   if (!txHash || !Number.isInteger(idx) || idx < 0) return null;
 
-  const address = node.address || node.addr || '';
-  const value = node.value || node.amount || node.outputAmount || node.output_value;
+  const address = node.address || node.addr || getObjectNumericKey(node, 5) || '';
+  const value = node.value || node.amount || node.outputAmount || node.output_value || getObjectNumericKey(node, 3);
   let lovelace = null;
   let assets = [];
 
