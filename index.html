@@ -28,32 +28,38 @@
         <video id="video" autoplay playsinline muted></video>
       </section>
 
-      <section class="card progress">
-        <h2>解碼進度</h2>
-        <p id="progressText">0%</p>
-        <div class="progress-bar">
-          <div id="progressFill"></div>
-        </div>
-        <p id="partStats">尚未收到任何 fragment。</p>
-      </section>
+      <section class="dashboard">
+        <section class="card progress panel-left">
+          <h2>解碼進度</h2>
+          <p id="progressText">0%</p>
+          <div class="progress-bar">
+            <div id="progressFill"></div>
+          </div>
+          <p id="partStats">尚未收到任何 fragment。</p>
+        </section>
 
-      <section class="card output">
-        <h2>解析結果</h2>
-        <div class="kv">
-          <span>UR Type</span>
-          <code id="urType">-</code>
-        </div>
-        <label for="decodedText">UTF-8（若可讀）</label>
-        <textarea id="decodedText" rows="4" readonly></textarea>
-        <label for="decodedHex">Payload Hex</label>
-        <textarea id="decodedHex" rows="6" readonly></textarea>
-        <label for="decodedBase64">Payload Base64</label>
-        <textarea id="decodedBase64" rows="4" readonly></textarea>
-      </section>
+        <section class="card output panel-center">
+          <h2>Cardano 交易解析</h2>
+          <div class="kv">
+            <span>UR Type</span>
+            <code id="urType">-</code>
+          </div>
+          <label for="cardanoTxDetails">Tx Details</label>
+          <textarea id="cardanoTxDetails" rows="12" readonly></textarea>
+          <label for="cardanoTx">Cardano Tx（Hex）</label>
+          <textarea id="cardanoTx" rows="4" readonly></textarea>
+          <label for="decodedText">Decoded Payload（JSON / UTF-8）</label>
+          <textarea id="decodedText" rows="4" readonly></textarea>
+          <label for="decodedHex">CBOR Hex</label>
+          <textarea id="decodedHex" rows="5" readonly></textarea>
+          <label for="decodedBase64">CBOR Base64</label>
+          <textarea id="decodedBase64" rows="3" readonly></textarea>
+        </section>
 
-      <section class="card logs">
-        <h2>掃描紀錄</h2>
-        <pre id="logBox"></pre>
+        <section class="card logs panel-right">
+          <h2>掃描紀錄</h2>
+          <pre id="logBox"></pre>
+        </section>
       </section>
     </main>
   </body>

@@ -14,6 +14,8 @@ const el = {
   progressFill: document.getElementById('progressFill'),
   partStats: document.getElementById('partStats'),
   urType: document.getElementById('urType'),
+  cardanoTx: document.getElementById('cardanoTx'),
+  cardanoTxDetails: document.getElementById('cardanoTxDetails'),
   decodedText: document.getElementById('decodedText'),
   decodedHex: document.getElementById('decodedHex'),
   decodedBase64: document.getElementById('decodedBase64'),
@@ -23,6 +25,7 @@ const el = {
 let BrowserQRCodeReaderClass = null;
 let NotFoundExceptionClass = null;
 let URDecoderClass = null;
+let CSL = null;
 
 let qrReader = null;
 let scanning = false;
@@ -65,6 +68,8 @@ function updateProgress() {
 
 function clearResult() {
   el.urType.textContent = '-';
+  el.cardanoTx.value = '';
+  el.cardanoTxDetails.value = '';
   el.decodedText.value = '';
   el.decodedHex.value = '';
   el.decodedBase64.value = '';
@@ -113,6 +118,344 @@ function bufferJsonReplacer(_key, value) {
   return value;
 }
 
+function tryParseHexString(value) {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim().toLowerCase();
+  if (normalized.startsWith('0x')) {
+    const raw = normalized.slice(2);
+    if (/^[0-9a-f]+$/.test(raw) && raw.length >= 40 && raw.length % 2 === 0) {
+      return Buffer.from(raw, 'hex');
+    }
+  }
+  if (/^[0-9a-f]+$/.test(normalized) && normalized.length >= 40 && normalized.length % 2 === 0) {
+    return Buffer.from(normalized, 'hex');
+  }
+  return null;
+}
+
+function findCardanoTxBytes(payload) {
+  const keyHints = ['tx', 'transaction', 'txbody', 'body', 'sign_data', 'signdata', 'payload', 'request'];
+  const candidates = [];
+
+  function scorePath(path) {
+    const joined = path.join('.').toLowerCase();
+    let score = 1;
+    for (const hint of keyHints) {
+      if (joined.includes(hint)) score += 3;
+    }
+    return score;
+  }
+
+  function addCandidate(path, value) {
+    let bytes = null;
+    if (Buffer.isBuffer(value)) {
+      bytes = value;
+    } else if (value instanceof Uint8Array) {
+      bytes = Buffer.from(value);
+    } else {
+      bytes = tryParseHexString(value);
+    }
+    if (!bytes || bytes.length < 20) return;
+    candidates.push({ bytes, path, score: scorePath(path) + Math.min(3, Math.floor(bytes.length / 200)) });
+  }
+
+  function walk(node, path, depth) {
+    if (depth > 10 || node == null) return;
+
+    addCandidate(path, node);
+
+    if (Array.isArray(node)) {
+      node.forEach((child, idx) => walk(child, [...path, String(idx)], depth + 1));
+      return;
+    }
+
+    if (node instanceof Map) {
+      for (const [k, v] of node.entries()) {
+        walk(v, [...path, String(k)], depth + 1);
+      }
+      return;
+    }
+
+    if (typeof node === 'object') {
+      for (const [k, v] of Object.entries(node)) {
+        walk(v, [...path, k], depth + 1);
+      }
+    }
+  }
+
+  walk(payload, [], 0);
+  if (!candidates.length) return null;
+
+  candidates.sort((a, b) => b.score - a.score || b.bytes.length - a.bytes.length);
+  return candidates[0];
+}
+
+function decodeAsciiSafe(bytes) {
+  try {
+    const text = new TextDecoder().decode(bytes);
+    const printable = /^[\u0009\u000a\u000d\u0020-\u007e]*$/.test(text);
+    return printable ? text : '';
+  } catch {
+    return '';
+  }
+}
+
+function normalizeHex(value) {
+  if (typeof value !== 'string') return '';
+  return value.toLowerCase().replace(/^0x/, '');
+}
+
+function parseLovelaceLike(value) {
+  if (value == null) return null;
+  if (typeof value === 'bigint') return value;
+  if (typeof value === 'number' && Number.isFinite(value)) return BigInt(Math.trunc(value));
+  if (typeof value === 'string' && /^\d+$/.test(value.trim())) return BigInt(value.trim());
+  return null;
+}
+
+function lovelaceToAdaString(lovelaceValue) {
+  const v = parseLovelaceLike(lovelaceValue);
+  if (v == null) return null;
+  const sign = v < 0n ? '-' : '';
+  const abs = v < 0n ? -v : v;
+  const whole = abs / 1000000n;
+  const frac = (abs % 1000000n).toString().padStart(6, '0').replace(/0+$/, '');
+  return frac ? `${sign}${whole.toString()}.${frac} ADA` : `${sign}${whole.toString()} ADA`;
+}
+
+function detectUtxoFromNode(node) {
+  if (!node || typeof node !== 'object' || Array.isArray(node) || node instanceof Map) return null;
+  const txHash = normalizeHex(node.txHash || node.tx_hash || node.transactionHash || node.transaction_id || '');
+  const index = node.index ?? node.outputIndex ?? node.tx_index ?? node.output_index;
+  const idx = Number(index);
+  if (!txHash || !Number.isInteger(idx) || idx < 0) return null;
+
+  const address = node.address || node.addr || '';
+  const value = node.value || node.amount || node.outputAmount || node.output_value;
+  let lovelace = null;
+  let assets = [];
+
+  if (typeof value === 'object' && value !== null) {
+    lovelace =
+      parseLovelaceLike(
+        value.lovelace ?? value.coin ?? value.ada ?? value.coins ?? value.amount ?? value.quantity
+      ) ?? null;
+    const valueAssets = value.assets || value.multiasset || value.tokens;
+    if (Array.isArray(valueAssets)) assets = valueAssets;
+  } else {
+    lovelace = parseLovelaceLike(value);
+  }
+
+  return {
+    key: `${txHash}#${idx}`,
+    txHash,
+    index: idx,
+    address: typeof address === 'string' ? address : '',
+    lovelace: lovelace == null ? null : lovelace.toString(),
+    assets
+  };
+}
+
+function collectKnownInputsContext(payload) {
+  const utxoByRef = new Map();
+
+  function walk(node, depth) {
+    if (depth > 12 || node == null) return;
+
+    const detected = detectUtxoFromNode(node);
+    if (detected) utxoByRef.set(detected.key, detected);
+
+    if (Array.isArray(node)) {
+      node.forEach((child) => walk(child, depth + 1));
+      return;
+    }
+    if (node instanceof Map) {
+      for (const v of node.values()) walk(v, depth + 1);
+      return;
+    }
+    if (typeof node === 'object') {
+      for (const v of Object.values(node)) walk(v, depth + 1);
+    }
+  }
+
+  walk(payload, 0);
+  return utxoByRef;
+}
+
+function extractMultiAsset(value) {
+  if (!value || typeof value.multiasset !== 'function') return [];
+  const multiasset = value.multiasset();
+  if (!multiasset) return [];
+
+  const result = [];
+  const policyIds = multiasset.keys();
+  for (let i = 0; i < policyIds.len(); i += 1) {
+    const policy = policyIds.get(i);
+    const policyHex = policy.to_hex();
+    const assets = multiasset.get(policy);
+    const assetNames = assets.keys();
+    for (let j = 0; j < assetNames.len(); j += 1) {
+      const assetName = assetNames.get(j);
+      const assetNameBytes = Buffer.from(assetName.name());
+      const assetNameHex = assetNameBytes.toString('hex');
+      const quantity = assets.get(assetName).to_str();
+      result.push({
+        policyId: policyHex,
+        assetNameHex,
+        assetNameAscii: decodeAsciiSafe(assetNameBytes),
+        quantity
+      });
+    }
+  }
+  return result;
+}
+
+function parseCardanoTx(bytes, payloadContext = null) {
+  if (!CSL) {
+    return { error: 'Cardano parser 未載入' };
+  }
+
+  const txBytes = Uint8Array.from(bytes);
+  let body = null;
+  let parsedAs = '';
+
+  try {
+    const tx = CSL.Transaction.from_bytes(txBytes);
+    body = tx.body();
+    parsedAs = 'Transaction';
+  } catch {
+    try {
+      body = CSL.TransactionBody.from_bytes(txBytes);
+      parsedAs = 'TransactionBody';
+    } catch (error) {
+      return {
+        error: `無法解析為 Cardano Tx/TxBody: ${error instanceof Error ? error.message : String(error)}`
+      };
+    }
+  }
+
+  const inputs = [];
+  const fromAddresses = new Set();
+  const utxoByRef = collectKnownInputsContext(payloadContext);
+  let inputTotalLovelace = 0n;
+  let inputValueKnown = true;
+  const bodyInputs = body.inputs();
+  for (let i = 0; i < bodyInputs.len(); i += 1) {
+    const input = bodyInputs.get(i);
+    const txHash = Buffer.from(input.transaction_id().to_bytes()).toString('hex');
+    const index = input.index();
+    const lookup = utxoByRef.get(`${txHash}#${index}`);
+    const knownLovelace = parseLovelaceLike(lookup?.lovelace);
+    if (knownLovelace == null) {
+      inputValueKnown = false;
+    } else {
+      inputTotalLovelace += knownLovelace;
+    }
+    if (lookup?.address) fromAddresses.add(lookup.address);
+    inputs.push({
+      txHash,
+      index,
+      address: lookup?.address || null,
+      lovelace: knownLovelace == null ? null : knownLovelace.toString(),
+      assets: lookup?.assets || []
+    });
+  }
+
+  const outputs = [];
+  const toAddresses = new Set();
+  let outputTotalLovelace = 0n;
+  const bodyOutputs = body.outputs();
+  for (let i = 0; i < bodyOutputs.len(); i += 1) {
+    const output = bodyOutputs.get(i);
+    const amount = output.amount();
+    const address = output.address();
+    let addressText = '';
+    try {
+      addressText = address.to_bech32();
+    } catch {
+      addressText = Buffer.from(address.to_bytes()).toString('hex');
+    }
+    outputs.push({
+      address: addressText,
+      lovelace: amount.coin().to_str(),
+      assets: extractMultiAsset(amount)
+    });
+    toAddresses.add(addressText);
+    outputTotalLovelace += BigInt(amount.coin().to_str());
+  }
+
+  const fee = body.fee?.()?.to_str?.() || '0';
+  const feeBigInt = parseLovelaceLike(fee) ?? 0n;
+  const ttl = typeof body.ttl === 'function' ? body.ttl() : null;
+  const validityStartInterval =
+    typeof body.validity_start_interval === 'function' ? body.validity_start_interval() : null;
+
+  const netWithoutChange =
+    inputValueKnown && inputTotalLovelace >= outputTotalLovelace + feeBigInt
+      ? (inputTotalLovelace - outputTotalLovelace - feeBigInt).toString()
+      : null;
+
+  return {
+    parsedAs,
+    inputCount: inputs.length,
+    outputCount: outputs.length,
+    fromAddresses: Array.from(fromAddresses),
+    toAddresses: Array.from(toAddresses),
+    feeLovelace: feeBigInt.toString(),
+    feeAda: lovelaceToAdaString(feeBigInt),
+    inputTotalLovelace: inputValueKnown ? inputTotalLovelace.toString() : null,
+    inputTotalAda: inputValueKnown ? lovelaceToAdaString(inputTotalLovelace) : null,
+    outputTotalLovelace: outputTotalLovelace.toString(),
+    outputTotalAda: lovelaceToAdaString(outputTotalLovelace),
+    balanceDeltaLovelaceExcludingChange: netWithoutChange,
+    ttl,
+    validityStartInterval,
+    inputs,
+    outputs
+  };
+}
+
+function formatCardanoTxDetails(details) {
+  if (!details || details.error) {
+    return details?.error || '無法解析 Cardano 交易';
+  }
+  const lines = [];
+  lines.push(`Parsed As: ${details.parsedAs}`);
+  lines.push(`Inputs: ${details.inputCount}`);
+  lines.push(`Outputs: ${details.outputCount}`);
+  lines.push(`Fee: ${details.feeLovelace} lovelace (${details.feeAda || 'N/A'})`);
+  lines.push(`Input Total: ${details.inputTotalLovelace ?? 'unknown'}${details.inputTotalAda ? ` (${details.inputTotalAda})` : ''}`);
+  lines.push(`Output Total: ${details.outputTotalLovelace} (${details.outputTotalAda || 'N/A'})`);
+  lines.push(`From: ${details.fromAddresses?.length ? details.fromAddresses.join(', ') : 'unknown (需額外 UTXO 資料)'}`);
+  lines.push(`To: ${details.toAddresses?.length ? details.toAddresses.join(', ') : 'unknown'}`);
+  if (details.ttl != null) lines.push(`TTL: ${details.ttl}`);
+  if (details.validityStartInterval != null) lines.push(`Valid From: ${details.validityStartInterval}`);
+
+  lines.push('');
+  lines.push('Outputs:');
+  details.outputs.forEach((o, idx) => {
+    lines.push(`- [${idx}] ${o.address}`);
+    lines.push(`  value: ${o.lovelace} lovelace (${lovelaceToAdaString(o.lovelace) || 'N/A'})`);
+    if (o.assets?.length) {
+      o.assets.forEach((a) => {
+        const assetLabel = a.assetNameAscii ? `${a.assetNameAscii} (${a.assetNameHex})` : a.assetNameHex;
+        lines.push(`  asset: ${a.policyId}.${assetLabel} = ${a.quantity}`);
+      });
+    }
+  });
+
+  lines.push('');
+  lines.push('Inputs:');
+  details.inputs.forEach((i, idx) => {
+    const value = i.lovelace == null ? 'unknown' : `${i.lovelace} lovelace (${lovelaceToAdaString(i.lovelace) || 'N/A'})`;
+    lines.push(`- [${idx}] ${i.txHash}#${i.index}`);
+    lines.push(`  from: ${i.address || 'unknown'}`);
+    lines.push(`  value: ${value}`);
+  });
+
+  return lines.join('\n');
+}
+
 function handleURSuccess() {
   const ur = urDecoder.resultUR();
   const decoded = ur.decodeCBOR();
@@ -136,6 +479,24 @@ function handleURSuccess() {
   el.decodedText.value = utf8Text;
   el.decodedHex.value = cborView.hex;
   el.decodedBase64.value = cborView.base64;
+
+  const isCardanoUr = typeof ur.type === 'string' && ur.type.toLowerCase().startsWith('cardano-');
+  if (isCardanoUr) {
+    const txCandidate = findCardanoTxBytes(decoded);
+    if (txCandidate) {
+      el.cardanoTx.value = txCandidate.bytes.toString('hex');
+      const txDetails = parseCardanoTx(txCandidate.bytes, decoded);
+      el.cardanoTxDetails.value = formatCardanoTxDetails(txDetails);
+      log(`已抽取 Cardano Tx，來源路徑=${txCandidate.path.join('.') || '(root)'}，長度=${txCandidate.bytes.length} bytes`);
+    } else {
+      el.cardanoTx.value = '';
+      el.cardanoTxDetails.value = '';
+      log('未在 Cardano payload 找到可辨識的交易 bytes。');
+    }
+  } else {
+    el.cardanoTx.value = '';
+    el.cardanoTxDetails.value = '';
+  }
 
   setStatus('解碼完成。');
   log(`解碼成功，UR type=${ur.type}，CBOR 長度=${ur.cbor.length} bytes`);
@@ -286,14 +647,16 @@ window.addEventListener('beforeunload', () => {
 });
 
 async function bootstrap() {
-  const [{ BrowserQRCodeReader, NotFoundException }, { URDecoder }] = await Promise.all([
+  const [{ BrowserQRCodeReader, NotFoundException }, { URDecoder }, cardanoSerializationLib] = await Promise.all([
     import('@zxing/library'),
-    import('@ngraveio/bc-ur')
+    import('@ngraveio/bc-ur'),
+    import('@emurgo/cardano-serialization-lib-asmjs')
   ]);
 
   BrowserQRCodeReaderClass = BrowserQRCodeReader;
   NotFoundExceptionClass = NotFoundException;
   URDecoderClass = URDecoder;
+  CSL = cardanoSerializationLib?.default || cardanoSerializationLib;
   qrReader = new BrowserQRCodeReaderClass();
   urDecoder = new URDecoderClass();
 
