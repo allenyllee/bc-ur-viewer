@@ -110,6 +110,7 @@ button:disabled {
   min-height: 260px;
   max-height: 460px;
   object-fit: cover;
+  transform: scaleX(-1);
 }
 
 .progress h2,
