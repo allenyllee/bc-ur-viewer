@@ -14,6 +14,7 @@ const el = {
   progressFill: document.getElementById('progressFill'),
   partStats: document.getElementById('partStats'),
   urType: document.getElementById('urType'),
+  rawPanel: document.getElementById('rawPanel'),
   cardanoPanel: document.getElementById('cardanoPanel'),
   overlayBackdrop: document.getElementById('overlayBackdrop'),
   cardanoTx: document.getElementById('cardanoTx'),
@@ -34,6 +35,7 @@ let scanning = false;
 let urDecoder = null;
 const seenParts = new Set();
 let cardanoOverlayOpen = false;
+let activeOverlayPanel = null;
 
 function setStatus(message) {
   el.status.textContent = message;
@@ -523,11 +525,23 @@ function setCardanoPanelVisible(visible) {
 }
 
 function openCardanoOverlay() {
-  if (cardanoOverlayOpen) return;
+  if (cardanoOverlayOpen && activeOverlayPanel === el.cardanoPanel) return;
+  closeCardanoOverlay();
   cardanoOverlayOpen = true;
+  activeOverlayPanel = el.cardanoPanel;
   document.body.classList.add('modal-open');
   el.overlayBackdrop.classList.remove('hidden');
-  el.cardanoPanel.classList.add('overlay-open');
+  activeOverlayPanel.classList.add('overlay-open');
+}
+
+function openRawOverlay() {
+  if (cardanoOverlayOpen && activeOverlayPanel === el.rawPanel) return;
+  closeCardanoOverlay();
+  cardanoOverlayOpen = true;
+  activeOverlayPanel = el.rawPanel;
+  document.body.classList.add('modal-open');
+  el.overlayBackdrop.classList.remove('hidden');
+  activeOverlayPanel.classList.add('overlay-open');
 }
 
 function closeCardanoOverlay() {
@@ -535,7 +549,10 @@ function closeCardanoOverlay() {
   cardanoOverlayOpen = false;
   document.body.classList.remove('modal-open');
   el.overlayBackdrop.classList.add('hidden');
-  el.cardanoPanel.classList.remove('overlay-open');
+  if (activeOverlayPanel) {
+    activeOverlayPanel.classList.remove('overlay-open');
+  }
+  activeOverlayPanel = null;
 }
 
 function bindOverlayDismiss() {
@@ -549,14 +566,20 @@ function bindOverlayDismiss() {
   });
 }
 
-function shouldAutoOpenCardanoOverlay() {
-  return !cardanoOverlayOpen;
+function bindOverlayTriggers() {
+  el.rawPanel.addEventListener('click', () => {
+    openRawOverlay();
+  });
+  el.cardanoPanel.addEventListener('click', () => {
+    if (el.cardanoPanel.classList.contains('hidden')) return;
+    openCardanoOverlay();
+  });
 }
 
-function maybeOpenCardanoOverlay() {
-  if (shouldAutoOpenCardanoOverlay()) {
-    openCardanoOverlay();
-  }
+function maybeAutoOpenCardanoOverlay() {
+  if (el.cardanoPanel.classList.contains('hidden')) return;
+  if (cardanoOverlayOpen && activeOverlayPanel === el.cardanoPanel) return;
+  openCardanoOverlay();
 }
 
 function handleURSuccess() {
@@ -587,7 +610,7 @@ function handleURSuccess() {
   const isCardanoUr = urType.startsWith('cardano-');
   if (isCardanoUr) {
     setCardanoPanelVisible(true);
-    maybeOpenCardanoOverlay();
+    maybeAutoOpenCardanoOverlay();
     if (urType === 'cardano-signature') {
       const sig = formatCardanoSignatureDetails(decoded);
       el.cardanoTx.value = sig.signatureHex;
@@ -818,6 +841,7 @@ async function bootstrap() {
   updateProgress();
   clearResult();
   bindOverlayDismiss();
+  bindOverlayTriggers();
   await listCameras();
 }
 

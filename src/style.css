@@ -193,6 +193,10 @@ textarea {
   display: none !important;
 }
 
+.overlay-trigger {
+  cursor: zoom-in;
+}
+
 .overlay-backdrop {
   position: fixed;
   inset: 0;
@@ -201,7 +205,7 @@ textarea {
   z-index: 70;
 }
 
-.cardano-panel.overlay-open {
+.output.overlay-open {
   position: fixed;
   z-index: 80;
   left: 50%;
@@ -211,9 +215,10 @@ textarea {
   max-height: min(88vh, 900px);
   overflow: auto;
   box-shadow: 0 24px 52px rgba(0, 0, 0, 0.34);
+  cursor: default;
 }
 
-.cardano-panel.overlay-open textarea {
+.output.overlay-open textarea {
   max-height: 26vh;
 }
 
