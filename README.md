@@ -50,6 +50,16 @@ Deployment URL:
 - For `username.github.io` repo: `https://username.github.io/`
 - For normal repos (e.g. `bc-ur-viewer`): `https://username.github.io/bc-ur-viewer/`
 
+### Supply Chain Security Automation
+
+This repo includes dependency and vulnerability monitoring by default:
+
+- `Dependabot` (`.github/dependabot.yml`)
+  - Checks npm dependencies weekly and opens update PRs.
+- `Security Audit` workflow (`.github/workflows/security-audit.yml`)
+  - Runs `npm audit --omit=dev --audit-level=moderate`
+  - Triggered on weekly schedule, push to `main`, and pull requests.
+
 ### Notes
 
 - Camera access requires HTTPS or localhost.

@@ -50,6 +50,16 @@ npm run build
 - 若 repo 是 `username.github.io`：`https://username.github.io/`
 - 一般 repo（例如 `bc-ur-viewer`）：`https://username.github.io/bc-ur-viewer/`
 
+## 供應鏈安全自動化
+
+此專案已內建依賴更新與弱點檢查機制：
+
+- `Dependabot`（`.github/dependabot.yml`）
+  - 每週檢查 npm 依賴並自動建立更新 PR。
+- `Security Audit` workflow（`.github/workflows/security-audit.yml`）
+  - 執行 `npm audit --omit=dev --audit-level=moderate`
+  - 於每週排程、`main` push、pull request 時觸發。
+
 ## 注意事項
 
 - 需要 HTTPS 或 localhost 才能使用相機權限（瀏覽器限制）。
