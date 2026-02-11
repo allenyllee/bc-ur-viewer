@@ -57,7 +57,8 @@ This repo includes dependency and vulnerability monitoring by default:
 - `Dependabot` (`.github/dependabot.yml`)
   - Checks npm dependencies weekly and opens update PRs.
 - `Security Audit` workflow (`.github/workflows/security-audit.yml`)
-  - Runs `npm audit --omit=dev --audit-level=moderate`
+  - Runs `npm audit --omit=dev --audit-level=moderate` (production dependencies)
+  - Runs `npm audit --audit-level=moderate` (all dependencies, including devDependencies)
   - Triggered on weekly schedule, push to `main`, and pull requests.
 
 ### Notes

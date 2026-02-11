@@ -57,7 +57,8 @@ npm run build
 - `Dependabot`（`.github/dependabot.yml`）
   - 每週檢查 npm 依賴並自動建立更新 PR。
 - `Security Audit` workflow（`.github/workflows/security-audit.yml`）
-  - 執行 `npm audit --omit=dev --audit-level=moderate`
+  - 執行 `npm audit --omit=dev --audit-level=moderate`（僅 production 依賴）
+  - 執行 `npm audit --audit-level=moderate`（含 devDependencies 的全部依賴）
   - 於每週排程、`main` push、pull request 時觸發。
 
 ## 注意事項
