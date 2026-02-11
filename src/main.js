@@ -635,9 +635,48 @@ async function ensureCameraPermission() {
   stream.getTracks().forEach((t) => t.stop());
 }
 
+function buildVideoConstraints(deviceId) {
+  const base = {
+    width: { ideal: 1280 },
+    height: { ideal: 720 },
+    advanced: [{ torch: false }]
+  };
+
+  if (deviceId) {
+    return {
+      ...base,
+      deviceId: { exact: deviceId }
+    };
+  }
+
+  return {
+    ...base,
+    facingMode: { ideal: 'environment' }
+  };
+}
+
+async function tryDisableTorchOnActiveTrack() {
+  const stream = el.video?.srcObject;
+  if (!(stream instanceof MediaStream)) return;
+  const track = stream.getVideoTracks?.()[0];
+  if (!track || typeof track.applyConstraints !== 'function') return;
+
+  try {
+    const caps = typeof track.getCapabilities === 'function' ? track.getCapabilities() : null;
+    if (caps?.torch) {
+      await track.applyConstraints({ advanced: [{ torch: false }] });
+      return;
+    }
+    await track.applyConstraints({ advanced: [{ fillLightMode: 'off' }] });
+  } catch {
+    // Ignore: many browsers/devices don't expose torch controls.
+  }
+}
+
 async function startDecodeLoop(deviceId) {
   if (!qrReader) return;
-  await qrReader.decodeFromVideoDevice(deviceId, el.video, (result, error) => {
+  const constraints = { video: buildVideoConstraints(deviceId), audio: false };
+  await qrReader.decodeFromConstraints(constraints, el.video, (result, error) => {
     if (result) {
       handlePart(result.getText());
     } else if (error) {
@@ -668,9 +707,11 @@ async function startScan() {
     setStatus('正在啟動鏡頭...');
     try {
       await startDecodeLoop(selectedDeviceId);
+      await tryDisableTorchOnActiveTrack();
     } catch (firstError) {
       log(`指定鏡頭啟動失敗，改用預設鏡頭重試：${firstError instanceof Error ? firstError.message : String(firstError)}`);
       await startDecodeLoop(null);
+      await tryDisableTorchOnActiveTrack();
     }
 
     setStatus('鏡頭已啟動，請將 BC-UR QR 對準鏡頭。');
