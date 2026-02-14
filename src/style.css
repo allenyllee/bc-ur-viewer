@@ -207,6 +207,10 @@ button:disabled {
   min-height: 260px;
   max-height: 460px;
   object-fit: cover;
+  transform: none;
+}
+
+.viewer video.is-mirrored {
   transform: scaleX(-1);
 }
 

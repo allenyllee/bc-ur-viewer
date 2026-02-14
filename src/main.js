@@ -40,6 +40,7 @@ const seenParts = new Set();
 let cardanoOverlayOpen = false;
 let activeOverlayPanel = null;
 let currentLang = 'zh-TW';
+let availableCameraDevices = [];
 
 const I18N = {
   'zh-TW': {
@@ -1175,6 +1176,21 @@ function pickRearFacingDeviceId(devices) {
   return rearCamera?.deviceId || null;
 }
 
+function isLikelyRearFacingDevice(device) {
+  const rearLabelPattern = /(back|rear|environment|world|後|后|背面)/i;
+  return rearLabelPattern.test(device?.label || '');
+}
+
+function applyVideoMirrorMode(deviceId) {
+  let shouldMirror = false;
+  if (deviceId) {
+    const matched = availableCameraDevices.find((device) => device.deviceId === deviceId);
+    const isRear = isLikelyRearFacingDevice(matched);
+    shouldMirror = !isRear;
+  }
+  el.video.classList.toggle('is-mirrored', shouldMirror);
+}
+
 function resolvePreferredCameraId(devices, preferredDeviceId) {
   if (!Array.isArray(devices) || devices.length === 0) return null;
   if (preferredDeviceId && devices.some((device) => device.deviceId === preferredDeviceId)) {
@@ -1196,6 +1212,7 @@ async function listCameras(preferredDeviceId = null) {
       throw new Error(t('camera.notSupportedEnum'));
     }
 
+    availableCameraDevices = devices;
     el.cameraSelect.innerHTML = '';
     for (const [index, device] of devices.entries()) {
       const option = document.createElement('option');
@@ -1208,6 +1225,7 @@ async function listCameras(preferredDeviceId = null) {
       option.value = '';
       option.textContent = t('camera.notFoundOption');
       el.cameraSelect.appendChild(option);
+      applyVideoMirrorMode(null);
       setStatus(t('status.noCamera'));
       return [];
     }
@@ -1216,8 +1234,11 @@ async function listCameras(preferredDeviceId = null) {
     if (resolvedDeviceId) {
       el.cameraSelect.value = resolvedDeviceId;
     }
+    applyVideoMirrorMode(el.cameraSelect.value || null);
     return devices;
   } catch (error) {
+    availableCameraDevices = [];
+    applyVideoMirrorMode(null);
     setStatus(t('status.readCameraFail'));
     log(t('log.listCameraFail', { err: error instanceof Error ? error.message : String(error) }));
     return [];
@@ -1273,6 +1294,7 @@ async function tryDisableTorchOnActiveTrack() {
 async function startDecodeLoop(deviceId) {
   if (!qrReader) return;
   const constraints = { video: buildVideoConstraints(deviceId), audio: false };
+  applyVideoMirrorMode(deviceId);
   await qrReader.decodeFromConstraints(constraints, el.video, (result, error) => {
     if (result) {
       handlePart(result.getText());
