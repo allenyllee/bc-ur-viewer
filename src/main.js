@@ -279,6 +279,14 @@ function resetDecoder() {
   log(t('log.reset'));
 }
 
+function prepareNextDecodeSession() {
+  if (!URDecoderClass) return;
+  // Keep current decoded output on screen, but reopen decoder state for next QR.
+  urDecoder = new URDecoderClass();
+  seenParts.clear();
+  updateProgress();
+}
+
 function parseDecodedBuffer(buf) {
   const bytes = new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
   const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
@@ -1142,6 +1150,11 @@ function handleURSuccess() {
 
   setStatus(t('status.done'));
   log(t('log.decodeSuccess', { type: ur.type, length: ur.cbor.length }));
+
+  if (scanning) {
+    prepareNextDecodeSession();
+    setStatus(t('status.scanWaiting'));
+  }
 }
 
 function handlePart(rawText) {
