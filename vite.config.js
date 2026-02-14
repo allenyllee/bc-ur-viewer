@@ -8,5 +8,11 @@ function getBasePath() {
 }
 
 export default defineConfig({
-  base: getBasePath()
+  base: getBasePath(),
+  server: {
+    allowedHosts: ['.trycloudflare.com']
+  },
+  preview: {
+    allowedHosts: ['.trycloudflare.com']
+  }
 });

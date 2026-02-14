@@ -2,6 +2,7 @@ import './style.css';
 import { Buffer } from 'buffer';
 
 globalThis.Buffer = globalThis.Buffer || Buffer;
+globalThis.process = globalThis.process || { env: {} };
 
 const el = {
   cameraSelect: document.getElementById('cameraSelect'),
@@ -97,6 +98,7 @@ const I18N = {
     'log.cameraStartFail': '鏡頭啟動失敗：{err}',
     'log.scanStopped': '掃描已停止。',
     'log.initFail': '初始化失敗：{err}',
+    'log.optionalParserLoadFail': '可選解析器載入失敗（{name}）：{err}',
     'msg.unreadableUtf8': '[非可讀 UTF-8 文字，請改看 Hex/Base64]',
     'msg.invalidUtf8': '[無法轉成 UTF-8，請改看 Hex/Base64]',
     'msg.nonSerializablePayload': '[此 UR payload 為複合資料，無法直接序列化]',
@@ -163,6 +165,7 @@ const I18N = {
     'log.cameraStartFail': 'Camera start failed: {err}',
     'log.scanStopped': 'Scanning stopped.',
     'log.initFail': 'Initialization failed: {err}',
+    'log.optionalParserLoadFail': 'Optional parser failed to load ({name}): {err}',
     'msg.unreadableUtf8': '[Non-printable UTF-8 text, please use Hex/Base64]',
     'msg.invalidUtf8': '[Cannot decode as UTF-8, please use Hex/Base64]',
     'msg.nonSerializablePayload': '[Composite payload cannot be directly serialized]',
@@ -1166,7 +1169,21 @@ function handlePart(rawText) {
   }
 }
 
-async function listCameras() {
+function pickRearFacingDeviceId(devices) {
+  const rearLabelPattern = /(back|rear|environment|world|後|后|背面)/i;
+  const rearCamera = devices.find((device) => rearLabelPattern.test(device.label || ''));
+  return rearCamera?.deviceId || null;
+}
+
+function resolvePreferredCameraId(devices, preferredDeviceId) {
+  if (!Array.isArray(devices) || devices.length === 0) return null;
+  if (preferredDeviceId && devices.some((device) => device.deviceId === preferredDeviceId)) {
+    return preferredDeviceId;
+  }
+  return pickRearFacingDeviceId(devices) || devices[0].deviceId || null;
+}
+
+async function listCameras(preferredDeviceId = null) {
   try {
     if (!qrReader) return;
     let devices = [];
@@ -1192,10 +1209,18 @@ async function listCameras() {
       option.textContent = t('camera.notFoundOption');
       el.cameraSelect.appendChild(option);
       setStatus(t('status.noCamera'));
+      return [];
     }
+
+    const resolvedDeviceId = resolvePreferredCameraId(devices, preferredDeviceId);
+    if (resolvedDeviceId) {
+      el.cameraSelect.value = resolvedDeviceId;
+    }
+    return devices;
   } catch (error) {
     setStatus(t('status.readCameraFail'));
     log(t('log.listCameraFail', { err: error instanceof Error ? error.message : String(error) }));
+    return [];
   }
 }
 
@@ -1266,11 +1291,12 @@ async function startScan() {
     setStatus(t('status.initPending'));
     return;
   }
-  const selectedDeviceId = el.cameraSelect.value || null;
+  const preferredDeviceId = el.cameraSelect.value || null;
 
   try {
     await ensureCameraPermission();
-    await listCameras();
+    await listCameras(preferredDeviceId);
+    const selectedDeviceId = el.cameraSelect.value || null;
 
     scanning = true;
     el.startBtn.disabled = true;
@@ -1310,6 +1336,14 @@ function stopScan() {
 
 el.startBtn.addEventListener('click', startScan);
 el.stopBtn.addEventListener('click', stopScan);
+el.cameraSelect.addEventListener('change', async () => {
+  if (!scanning) return;
+  qrReader?.reset();
+  scanning = false;
+  el.startBtn.disabled = false;
+  el.stopBtn.disabled = true;
+  await startScan();
+});
 el.resetBtn.addEventListener('click', () => {
   resetDecoder();
   setStatus(scanning ? t('status.scanWaiting') : t('status.resetDone'));
@@ -1320,9 +1354,11 @@ window.addEventListener('beforeunload', () => {
 });
 
 async function bootstrap() {
-  const [{ BrowserQRCodeReader, NotFoundException }, { URDecoder }, cardanoSerializationLib, cborSync] = await Promise.all([
+  const [{ BrowserQRCodeReader, NotFoundException }, { URDecoder }] = await Promise.all([
     import('@zxing/library'),
-    import('@ngraveio/bc-ur'),
+    import('@ngraveio/bc-ur')
+  ]);
+  const [cardanoSerializationLibResult, cborSyncResult] = await Promise.allSettled([
     import('@emurgo/cardano-serialization-lib-asmjs'),
     import('cbor-sync')
   ]);
@@ -1330,8 +1366,30 @@ async function bootstrap() {
   BrowserQRCodeReaderClass = BrowserQRCodeReader;
   NotFoundExceptionClass = NotFoundException;
   URDecoderClass = URDecoder;
-  CSL = cardanoSerializationLib?.default || cardanoSerializationLib;
-  cborSyncLib = cborSync?.default || cborSync;
+  if (cardanoSerializationLibResult.status === 'fulfilled') {
+    const cardanoSerializationLib = cardanoSerializationLibResult.value;
+    CSL = cardanoSerializationLib?.default || cardanoSerializationLib;
+  } else {
+    CSL = null;
+    log(
+      t('log.optionalParserLoadFail', {
+        name: '@emurgo/cardano-serialization-lib-asmjs',
+        err: cardanoSerializationLibResult.reason?.message || String(cardanoSerializationLibResult.reason)
+      })
+    );
+  }
+  if (cborSyncResult.status === 'fulfilled') {
+    const cborSync = cborSyncResult.value;
+    cborSyncLib = cborSync?.default || cborSync;
+  } else {
+    cborSyncLib = null;
+    log(
+      t('log.optionalParserLoadFail', {
+        name: 'cbor-sync',
+        err: cborSyncResult.reason?.message || String(cborSyncResult.reason)
+      })
+    );
+  }
   qrReader = new BrowserQRCodeReaderClass();
   urDecoder = new URDecoderClass();
 
