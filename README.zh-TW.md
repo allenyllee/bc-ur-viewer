@@ -38,6 +38,50 @@ npm run build
 
 輸出目錄為 `dist/`，可直接部署到任意靜態網站（GitHub Pages、Netlify、Cloudflare Pages、S3 靜態站等）。
 
+## 預覽方式
+
+### 1) 本機開發預覽（建議）
+
+```bash
+npm run dev -- --host 0.0.0.0 --port 5173
+```
+
+- 本機：`http://localhost:5173`
+- 同網段裝置：`http://<你的內網IP>:5173`
+
+### 2) 預覽 build 結果
+
+```bash
+npm run build
+npm run preview -- --host 0.0.0.0 --port 4173
+```
+
+- 本機：`http://localhost:4173`
+- 同網段裝置：`http://<你的內網IP>:4173`
+
+### 3) 手機相機測試（HTTPS）
+
+手機瀏覽器通常要求 `HTTPS` 才能使用相機（`localhost` 例外）。  
+可用 Cloudflare Tunnel 快速提供 HTTPS：
+
+1. 先啟動 dev server：
+
+```bash
+npm run dev -- --host 0.0.0.0 --port 5173
+```
+
+2. 另開終端啟動 tunnel：
+
+```bash
+cloudflared tunnel --url http://localhost:5173
+```
+
+3. 用手機打開 `https://xxxx.trycloudflare.com`
+
+備註：
+- 若 Windows PowerShell 執行 `npm` 被 policy 擋住，請改用 `npm.cmd`。
+- 本專案已在 `vite.config.js` 允許 `*.trycloudflare.com` (`server.allowedHosts` / `preview.allowedHosts`)。
+
 ## GitHub Pages 自動部署
 
 此專案已內建 GitHub Actions workflow：每次 push 到 `main` 都會自動部署到 GitHub Pages。

@@ -38,6 +38,50 @@ npm run build
 
 Build output is in `dist/`, ready for static hosting (GitHub Pages / Netlify / Cloudflare Pages / S3 static hosting).
 
+### Preview
+
+### 1) Development Preview (Recommended)
+
+```bash
+npm run dev -- --host 0.0.0.0 --port 5173
+```
+
+- Local: `http://localhost:5173`
+- LAN devices: `http://<your-LAN-IP>:5173`
+
+### 2) Preview Built Output
+
+```bash
+npm run build
+npm run preview -- --host 0.0.0.0 --port 4173
+```
+
+- Local: `http://localhost:4173`
+- LAN devices: `http://<your-LAN-IP>:4173`
+
+### 3) HTTPS on Mobile (Camera Testing)
+
+Mobile browsers usually require `HTTPS` for camera access (`localhost` is an exception).  
+Use Cloudflare Tunnel for quick HTTPS:
+
+1. Start dev server:
+
+```bash
+npm run dev -- --host 0.0.0.0 --port 5173
+```
+
+2. In another terminal:
+
+```bash
+cloudflared tunnel --url http://localhost:5173
+```
+
+3. Open the generated `https://xxxx.trycloudflare.com` URL on mobile.
+
+Notes:
+- On Windows PowerShell, if `npm` is blocked by execution policy, use `npm.cmd`.
+- `vite.config.js` already allows `*.trycloudflare.com` (`server.allowedHosts` / `preview.allowedHosts`).
+
 ### GitHub Pages Auto Deploy
 
 This repo includes a GitHub Actions workflow that deploys on every push to `main`.
