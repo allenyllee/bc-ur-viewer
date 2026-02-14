@@ -62,6 +62,8 @@ const I18N = {
     'status.initPending': '初始化中，請稍候再試。',
     'status.startingCamera': '正在啟動鏡頭...',
     'status.cameraReady': '鏡頭已啟動，請將 BC-UR QR 對準鏡頭。',
+    'status.frontCameraDistanceHint': '前鏡頭建議保持約 20-40cm 距離，以利對焦。',
+    'status.frontCameraQuietZoneHint': '請確保 QR 四周是白色留白區，避免深色背景貼邊。',
     'status.cameraStartFail': '鏡頭啟動失敗，請確認權限或 HTTPS/localhost。',
     'status.stopped': '已停止掃描。',
     'status.resetDone': '已重置解碼。',
@@ -70,6 +72,7 @@ const I18N = {
     'progress.title': '解碼進度',
     'progress.none': '尚未收到任何 fragment。',
     'progress.collected': '已收集 {received} / {expected} 個 fragment',
+    'scan.guideTip': '請讓 QR 周邊保留白色留白區（quiet zone）',
     'raw.title': '解析結果（Raw Data）',
     'raw.urType': 'UR Type',
     'raw.decodedPayload': 'Decoded Payload（JSON / UTF-8）',
@@ -129,6 +132,8 @@ const I18N = {
     'status.initPending': 'Initializing, please wait.',
     'status.startingCamera': 'Starting camera...',
     'status.cameraReady': 'Camera started. Point the lens at BC-UR QR.',
+    'status.frontCameraDistanceHint': 'For front camera, keep about 20-40 cm distance for better focus.',
+    'status.frontCameraQuietZoneHint': 'Keep a white quiet zone around the QR code; avoid dark edge backgrounds.',
     'status.cameraStartFail': 'Failed to start camera. Check permissions or HTTPS/localhost.',
     'status.stopped': 'Scanning stopped.',
     'status.resetDone': 'Decoder reset.',
@@ -137,6 +142,7 @@ const I18N = {
     'progress.title': 'Decode Progress',
     'progress.none': 'No fragment received yet.',
     'progress.collected': 'Collected {received} / {expected} fragments',
+    'scan.guideTip': 'Keep a white quiet zone around the QR code',
     'raw.title': 'Decoded Result (Raw Data)',
     'raw.urType': 'UR Type',
     'raw.decodedPayload': 'Decoded Payload (JSON / UTF-8)',
@@ -1191,6 +1197,21 @@ function applyVideoMirrorMode(deviceId) {
   el.video.classList.toggle('is-mirrored', shouldMirror);
 }
 
+function isFrontCameraSelection(deviceId) {
+  const matched = availableCameraDevices.find((device) => device.deviceId === deviceId);
+  if (!matched) return false;
+  return !isLikelyRearFacingDevice(matched);
+}
+
+function isIgnorableScanError(error) {
+  const name = String(error?.name || '').toLowerCase();
+  const message = String(error?.message || '').toLowerCase();
+  if (name.includes('notfound') || message.includes('notfound')) return true;
+  if (name.includes('formatexception') || message.includes('formatexception')) return true;
+  if (name.includes('checksumexception') || message.includes('checksumexception')) return true;
+  return false;
+}
+
 function resolvePreferredCameraId(devices, preferredDeviceId) {
   if (!Array.isArray(devices) || devices.length === 0) return null;
   if (preferredDeviceId && devices.some((device) => device.deviceId === preferredDeviceId)) {
@@ -1254,11 +1275,16 @@ async function ensureCameraPermission() {
 }
 
 function buildVideoConstraints(deviceId) {
+  const selectedDevice = availableCameraDevices.find((device) => device.deviceId === deviceId);
+  const isRear = isLikelyRearFacingDevice(selectedDevice);
   const base = {
     width: { ideal: 1280 },
     height: { ideal: 720 },
-    advanced: [{ torch: false }]
+    frameRate: { ideal: 24, max: 30 }
   };
+  if (isRear) {
+    base.advanced = [{ torch: false }];
+  }
 
   if (deviceId) {
     return {
@@ -1291,6 +1317,27 @@ async function tryDisableTorchOnActiveTrack() {
   }
 }
 
+async function tryEnableContinuousFocusOnActiveTrack() {
+  const stream = el.video?.srcObject;
+  if (!(stream instanceof MediaStream)) return false;
+  const track = stream.getVideoTracks?.()[0];
+  if (!track || typeof track.applyConstraints !== 'function' || typeof track.getCapabilities !== 'function') {
+    return false;
+  }
+
+  try {
+    const caps = track.getCapabilities?.();
+    const focusModes = Array.isArray(caps?.focusMode) ? caps.focusMode : [];
+    if (focusModes.includes('continuous')) {
+      await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] });
+      return true;
+    }
+  } catch {
+    // Ignore unsupported focus controls.
+  }
+  return false;
+}
+
 async function startDecodeLoop(deviceId) {
   if (!qrReader) return;
   const constraints = { video: buildVideoConstraints(deviceId), audio: false };
@@ -1301,7 +1348,7 @@ async function startDecodeLoop(deviceId) {
     } else if (error) {
       const isNotFound =
         typeof NotFoundExceptionClass === 'function' && error instanceof NotFoundExceptionClass;
-      if (isNotFound) return;
+      if (isNotFound || isIgnorableScanError(error)) return;
       log(t('log.scanError', { err: error.message || String(error) }));
     }
   });
@@ -1327,14 +1374,21 @@ async function startScan() {
     setStatus(t('status.startingCamera'));
     try {
       await startDecodeLoop(selectedDeviceId);
+      await tryEnableContinuousFocusOnActiveTrack();
       await tryDisableTorchOnActiveTrack();
     } catch (firstError) {
       log(t('log.cameraRetry', { err: firstError instanceof Error ? firstError.message : String(firstError) }));
       await startDecodeLoop(null);
+      await tryEnableContinuousFocusOnActiveTrack();
       await tryDisableTorchOnActiveTrack();
     }
 
-    setStatus(t('status.cameraReady'));
+    const statusLines = [t('status.cameraReady')];
+    if (isFrontCameraSelection(selectedDeviceId)) {
+      statusLines.push(t('status.frontCameraDistanceHint'));
+      statusLines.push(t('status.frontCameraQuietZoneHint'));
+    }
+    setStatus(statusLines.join(' '));
     log(t('log.scanStarted'));
   } catch (error) {
     qrReader?.reset();
@@ -1376,7 +1430,7 @@ window.addEventListener('beforeunload', () => {
 });
 
 async function bootstrap() {
-  const [{ BrowserQRCodeReader, NotFoundException }, { URDecoder }] = await Promise.all([
+  const [{ BrowserQRCodeReader, NotFoundException, DecodeHintType, BarcodeFormat }, { URDecoder }] = await Promise.all([
     import('@zxing/library'),
     import('@ngraveio/bc-ur')
   ]);
@@ -1388,6 +1442,12 @@ async function bootstrap() {
   BrowserQRCodeReaderClass = BrowserQRCodeReader;
   NotFoundExceptionClass = NotFoundException;
   URDecoderClass = URDecoder;
+  const hints = new Map();
+  hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.QR_CODE]);
+  hints.set(DecodeHintType.TRY_HARDER, true);
+  if (DecodeHintType.ALSO_INVERTED) {
+    hints.set(DecodeHintType.ALSO_INVERTED, true);
+  }
   if (cardanoSerializationLibResult.status === 'fulfilled') {
     const cardanoSerializationLib = cardanoSerializationLibResult.value;
     CSL = cardanoSerializationLib?.default || cardanoSerializationLib;
@@ -1412,7 +1472,7 @@ async function bootstrap() {
       })
     );
   }
-  qrReader = new BrowserQRCodeReaderClass();
+  qrReader = new BrowserQRCodeReaderClass(hints, 150);
   urDecoder = new URDecoderClass();
 
   const storedLang = localStorage.getItem('bcur_lang');

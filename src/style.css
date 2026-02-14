@@ -214,6 +214,44 @@ button:disabled {
   transform: scaleX(-1);
 }
 
+.viewer {
+  position: relative;
+  overflow: hidden;
+}
+
+.scan-guide {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.scan-guide-box {
+  width: min(72vw, 280px);
+  aspect-ratio: 1;
+  border: 2px solid rgba(255, 255, 255, 0.92);
+  border-radius: 18px;
+  box-shadow:
+    0 0 0 9999px rgba(0, 0, 0, 0.18),
+    inset 0 0 0 1px rgba(15, 35, 64, 0.35);
+}
+
+.scan-guide-tip {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #18324a;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-align: center;
+}
+
 .progress h2,
 .output h2,
 .logs h2 {
