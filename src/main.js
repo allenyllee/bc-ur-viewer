@@ -84,6 +84,8 @@ const I18N = {
     'logs.title': '掃描紀錄',
     'camera.notFoundOption': '找不到可用鏡頭',
     'camera.defaultLabel': 'Camera {index}',
+    'camera.frontLabel': '前置相機 {index}',
+    'camera.rearLabel': '後置相機 {index}',
     'camera.notSupportedEnum': '此瀏覽器不支援 enumerateDevices',
     'camera.notSupportedMedia': '此瀏覽器不支援 getUserMedia',
     'log.reset': '已重置解碼器。',
@@ -154,6 +156,8 @@ const I18N = {
     'logs.title': 'Scan Logs',
     'camera.notFoundOption': 'No camera device found',
     'camera.defaultLabel': 'Camera {index}',
+    'camera.frontLabel': 'Front Camera {index}',
+    'camera.rearLabel': 'Rear Camera {index}',
     'camera.notSupportedEnum': 'This browser does not support enumerateDevices',
     'camera.notSupportedMedia': 'This browser does not support getUserMedia',
     'log.reset': 'Decoder reset.',
@@ -186,7 +190,9 @@ const I18N = {
 };
 
 function resolveLang(lang) {
-  return lang === 'en' ? 'en' : 'zh-TW';
+  const normalized = String(lang || '').trim().toLowerCase();
+  if (normalized === 'en' || normalized.startsWith('en-') || normalized === 'english') return 'en';
+  return 'zh-TW';
 }
 
 function t(key, vars = {}) {
@@ -213,7 +219,7 @@ function applyI18nToDom() {
     if (!key) return;
     node.setAttribute('aria-label', t(key));
   });
-  if (!urDecoder) {
+  if (!urDecoder && el.partStats) {
     el.partStats.textContent = t('progress.none');
   }
 }
@@ -221,8 +227,11 @@ function applyI18nToDom() {
 function setLanguage(lang) {
   currentLang = resolveLang(lang);
   localStorage.setItem('bcur_lang', currentLang);
-  el.languageSelect.value = currentLang;
+  if (el.languageSelect) {
+    el.languageSelect.value = currentLang;
+  }
   applyI18nToDom();
+  rerenderCameraOptions();
 }
 
 function setStatus(message) {
@@ -1189,15 +1198,58 @@ function handlePart(rawText) {
   }
 }
 
-function pickRearFacingDeviceId(devices) {
+function getCameraFacing(label) {
+  const text = String(label || '');
+  if (!text) return null;
   const rearLabelPattern = /(back|rear|environment|world|後|后|背面)/i;
-  const rearCamera = devices.find((device) => rearLabelPattern.test(device.label || ''));
+  if (rearLabelPattern.test(text)) return 'rear';
+  const frontLabelPattern = /(front|user|face|facetime|前|自拍)/i;
+  if (frontLabelPattern.test(text)) return 'front';
+  return null;
+}
+
+function getCameraOptionLabel(device, index) {
+  const facing = getCameraFacing(device?.label || '');
+  if (facing === 'rear') {
+    return t('camera.rearLabel', { index: index + 1 });
+  }
+  if (facing === 'front') {
+    return t('camera.frontLabel', { index: index + 1 });
+  }
+  return t('camera.defaultLabel', { index: index + 1 });
+}
+
+function rerenderCameraOptions(preferredDeviceId = null) {
+  if (!el.cameraSelect) return;
+  const devices = Array.isArray(availableCameraDevices) ? availableCameraDevices : [];
+  const currentSelection = el.cameraSelect.value || null;
+  el.cameraSelect.innerHTML = '';
+  for (const [index, device] of devices.entries()) {
+    const option = document.createElement('option');
+    option.value = device.deviceId;
+    option.textContent = getCameraOptionLabel(device, index);
+    el.cameraSelect.appendChild(option);
+  }
+  if (!devices.length) {
+    const option = document.createElement('option');
+    option.value = '';
+    option.textContent = t('camera.notFoundOption');
+    el.cameraSelect.appendChild(option);
+    return;
+  }
+  const selectedId = resolvePreferredCameraId(devices, preferredDeviceId || currentSelection);
+  if (selectedId) {
+    el.cameraSelect.value = selectedId;
+  }
+}
+
+function pickRearFacingDeviceId(devices) {
+  const rearCamera = devices.find((device) => getCameraFacing(device.label) === 'rear');
   return rearCamera?.deviceId || null;
 }
 
 function isLikelyRearFacingDevice(device) {
-  const rearLabelPattern = /(back|rear|environment|world|後|后|背面)/i;
-  return rearLabelPattern.test(device?.label || '');
+  return getCameraFacing(device?.label || '') === 'rear';
 }
 
 function applyVideoMirrorMode(deviceId) {
@@ -1247,24 +1299,14 @@ async function listCameras(preferredDeviceId = null) {
     }
 
     availableCameraDevices = devices;
-    el.cameraSelect.innerHTML = '';
-    for (const [index, device] of devices.entries()) {
-      const option = document.createElement('option');
-      option.value = device.deviceId;
-      option.textContent = device.label || t('camera.defaultLabel', { index: index + 1 });
-      el.cameraSelect.appendChild(option);
-    }
+    rerenderCameraOptions(preferredDeviceId);
     if (!devices.length) {
-      const option = document.createElement('option');
-      option.value = '';
-      option.textContent = t('camera.notFoundOption');
-      el.cameraSelect.appendChild(option);
       applyVideoMirrorMode(null);
       setStatus(t('status.noCamera'));
       return [];
     }
 
-    const resolvedDeviceId = resolvePreferredCameraId(devices, preferredDeviceId);
+    const resolvedDeviceId = resolvePreferredCameraId(devices, preferredDeviceId || el.cameraSelect.value || null);
     if (resolvedDeviceId) {
       el.cameraSelect.value = resolvedDeviceId;
     }
