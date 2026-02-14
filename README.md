@@ -9,8 +9,11 @@ A static-deployable web app that uses the browser camera to scan QR codes and de
 - Use system camera via browser (`getUserMedia`)
 - Scan QR with ZXing
 - Accumulate and decode BC-UR fountain fragments (`@ngraveio/bc-ur`)
+- Prefer rear camera by default; front camera is mirrored while rear camera is not
 - Built-in i18n UI (English / Traditional Chinese), with persisted preference
 - Show decode progress, UR type, and payload (JSON/UTF-8, Hex, Base64)
+- Continue scanning the next QR immediately after a successful decode (no manual restart needed)
+- Built-in scan guide frame and quiet-zone hint to improve mobile recognition
 - For non-Cardano URs: show Raw Data panel and auto-open Raw overlay
 - For Cardano URs: show Cardano panel and auto-open Cardano overlay
 - Parse Cardano `sign-request` (inputs/outputs, addresses, fee, TTL, amount summary)
@@ -110,4 +113,6 @@ This repo includes dependency and vulnerability monitoring by default:
 - Camera access requires HTTPS or localhost.
 - If payload is not plain text, `Decoded Payload` will show a fallback hint; use Hex/Base64.
 - Torch controls are not supported on all browsers/devices; behavior degrades gracefully.
+- Front camera will try to use continuous focus (`focusMode: continuous`) when supported by the browser/device.
+- If optional Cardano parsers fail to load, core scanning still works (with a log entry).
 - `From/Input value` depends on whether UTXO context exists in payload; otherwise it may show `unknown`.

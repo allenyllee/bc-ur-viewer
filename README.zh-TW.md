@@ -9,8 +9,11 @@
 - 讀取系統鏡頭（`getUserMedia`）
 - 掃描 QR（ZXing）
 - 累積並解碼 BC-UR fountain fragments（`@ngraveio/bc-ur`）
+- 鏡頭預設優先後鏡頭；前鏡頭鏡像、後鏡頭不鏡像
 - 多語系介面（English / 繁體中文，可即時切換，會記住偏好）
 - 顯示解碼進度、UR type、payload（JSON/UTF-8、Hex、Base64）
+- 解碼完成後可直接繼續掃下一筆（不需手動重啟）
+- 內建掃描導引框與 quiet zone 提示，提升手機辨識成功率
 - 非 Cardano 類型時顯示 Raw Data，並自動彈出 Raw overlay
 - Cardano 類型時顯示 Cardano 解析區塊，並自動彈出 Cardano overlay
 - Cardano `sign-request` 可解析輸入/輸出、地址、fee、TTL、金額摘要
@@ -110,4 +113,6 @@ cloudflared tunnel --url http://localhost:5173
 - 需要 HTTPS 或 localhost 才能使用相機權限（瀏覽器限制）。
 - 若 payload 非文字，`Decoded Payload` 會顯示提示，請改看 `Hex/Base64`。
 - 部分行動裝置/瀏覽器不支援 `torch` 控制，補光燈關閉行為會自動降級。
+- 前鏡頭會嘗試套用連續對焦（`focusMode: continuous`）；是否生效取決於裝置/瀏覽器支援。
+- Cardano 解析模組若載入失敗，主掃描功能仍可用（會在紀錄顯示可選模組載入失敗）。
 - `From/Input value` 依賴 payload 內是否附帶 UTXO context；若資料不足會顯示 `unknown`。
