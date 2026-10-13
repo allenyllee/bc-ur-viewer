@@ -13,7 +13,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@emurgo/cardano-serialization-lib-asmjs": "^15.0.3",
+    "@emurgo/cardano-serialization-lib-asmjs": "^17.0.0",
     "@ngraveio/bc-ur": "^1.1.13",
     "@zxing/library": "^0.23.0",
     "buffer": "^6.0.3",
