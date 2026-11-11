@@ -28,6 +28,8 @@ A static-deployable web app that uses the browser camera to scan QR codes and de
 
 ### Development
 
+Use Node.js 24 or later, matching the QR library's supported runtime and CI.
+
 ```bash
 npm install
 npm run dev
@@ -40,6 +42,17 @@ npm run build
 ```
 
 Build output is in `dist/`, ready for static hosting (GitHub Pages / Netlify / Cloudflare Pages / S3 static hosting).
+
+### Regression Tests
+
+```bash
+npm ci
+npm test
+```
+
+Tests cover synthetic QR images (including dense multipart symbols, rotation, shear, and mirroring), UR decoding, reset/continuous scanning, Cardano signature display, and mocked camera permission failure. Normal perspective-aware QR detection stays first; expected misses receive bounded clean-symbol and rotated-image retries. QR error correction remains enabled, and unexpected programming errors are not suppressed.
+
+These Node tests use synthetic images and DOM/media doubles. They do not replace camera testing on Android Chrome and iOS Safari. For hardware acceptance, check a dense animated UR on both devices, front/rear camera selection, permission rejection/retry, Stop/Start, rotation, and focus/torch behavior. Keep a white quiet zone around displayed QR codes. Retry work is bounded, but dense or noisy frames may take longer to process; mobile performance needs device testing.
 
 ### Preview
 
@@ -104,6 +117,7 @@ This repo includes dependency and vulnerability monitoring by default:
 - `Dependabot` (`.github/dependabot.yml`)
   - Checks npm dependencies weekly and opens update PRs.
 - `Security Audit` workflow (`.github/workflows/security-audit.yml`)
+  - Runs regression tests and a production build on Node 24
   - Runs `npm audit --omit=dev --audit-level=moderate` (production dependencies)
   - Runs `npm audit --audit-level=moderate` (all dependencies, including devDependencies)
   - Triggered on weekly schedule, push to `main`, and pull requests.

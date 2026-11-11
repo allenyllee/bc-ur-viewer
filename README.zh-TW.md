@@ -28,6 +28,8 @@
 
 ## 開發
 
+請使用 Node.js 24 以上版本，與 QR 套件及 CI 的執行環境一致。
+
 ```bash
 npm install
 npm run dev
@@ -40,6 +42,17 @@ npm run build
 ```
 
 輸出目錄為 `dist/`，可直接部署到任意靜態網站（GitHub Pages、Netlify、Cloudflare Pages、S3 靜態站等）。
+
+## 回歸測試
+
+```bash
+npm ci
+npm test
+```
+
+測試涵蓋合成 QR 圖像（高密度多片段、旋轉、斜切與鏡像）、UR 解碼、重置與連續掃描、Cardano 簽章顯示，以及模擬相機權限拒絕。一般 QR 定位仍優先執行；預期的辨識失敗才會啟用次數有限的乾淨圖樣與旋轉備援，不跳過 QR 錯誤更正，也不隱藏非預期程式錯誤。
+
+Node 測試使用合成圖像與 DOM／相機替身，不能取代 Android Chrome、iOS Safari 實機測試。硬體驗證項目包括高密度動態 UR、前後鏡頭切換、權限拒絕後重試、停止後啟動、方向旋轉、對焦與補光。QR 四周請保留白色留白區。備援次數有限，但高密度或雜訊畫面仍可能增加處理時間，手機效能需另以實機驗證。
 
 ## 預覽方式
 
@@ -104,6 +117,7 @@ cloudflared tunnel --url http://localhost:5173
 - `Dependabot`（`.github/dependabot.yml`）
   - 每週檢查 npm 依賴並自動建立更新 PR。
 - `Security Audit` workflow（`.github/workflows/security-audit.yml`）
+  - 使用 Node 24 執行回歸測試與正式版建置
   - 執行 `npm audit --omit=dev --audit-level=moderate`（僅 production 依賴）
   - 執行 `npm audit --audit-level=moderate`（含 devDependencies 的全部依賴）
   - 於每週排程、`main` push、pull request 時觸發。

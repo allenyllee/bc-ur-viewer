@@ -1,5 +1,6 @@
 import './style.css';
 import { Buffer } from 'buffer';
+import { createBrowserQrReader } from './qr-reader.js';
 
 globalThis.Buffer = globalThis.Buffer || Buffer;
 globalThis.process = globalThis.process || { env: {} };
@@ -27,7 +28,6 @@ const el = {
   logBox: document.getElementById('logBox')
 };
 
-let BrowserQRCodeReaderClass = null;
 let NotFoundExceptionClass = null;
 let URDecoderClass = null;
 let CSL = null;
@@ -1485,7 +1485,7 @@ window.addEventListener('beforeunload', () => {
 });
 
 async function bootstrap() {
-  const [{ BrowserQRCodeReader, NotFoundException, DecodeHintType, BarcodeFormat }, { URDecoder }] = await Promise.all([
+  const [zxing, { URDecoder }] = await Promise.all([
     import('@zxing/library'),
     import('@ngraveio/bc-ur')
   ]);
@@ -1494,15 +1494,8 @@ async function bootstrap() {
     import('cbor-sync')
   ]);
 
-  BrowserQRCodeReaderClass = BrowserQRCodeReader;
-  NotFoundExceptionClass = NotFoundException;
+  NotFoundExceptionClass = zxing.NotFoundException;
   URDecoderClass = URDecoder;
-  const hints = new Map();
-  hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.QR_CODE]);
-  hints.set(DecodeHintType.TRY_HARDER, true);
-  if (DecodeHintType.ALSO_INVERTED) {
-    hints.set(DecodeHintType.ALSO_INVERTED, true);
-  }
   if (cardanoSerializationLibResult.status === 'fulfilled') {
     const cardanoSerializationLib = cardanoSerializationLibResult.value;
     CSL = cardanoSerializationLib?.default || cardanoSerializationLib;
@@ -1527,7 +1520,7 @@ async function bootstrap() {
       })
     );
   }
-  qrReader = new BrowserQRCodeReaderClass(hints, 150);
+  qrReader = createBrowserQrReader(zxing);
   urDecoder = new URDecoderClass();
 
   const storedLang = localStorage.getItem('bcur_lang');
