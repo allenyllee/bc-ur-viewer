@@ -25,11 +25,14 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
       - name: Install Dependencies
         run: npm ci
+
+      - name: Run regression tests
+        run: npm test
 
       - name: Build
         run: npm run build
